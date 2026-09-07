@@ -123,9 +123,708 @@ Use this as your spoken walkthrough in a design round.
 8. Close with trade-offs  
    “Multi-agent adds orchestration complexity but gives better control, testability, and safer execution for enterprise operations. For this domain, that trade-off is worth it.”
 
----
+---------------------------------------------------------------------------------------------
 
-If you want, I can now give you a final one-page interview prep sheet with:
-1. 5 strongest project talking points  
-2. 5 failure stories with recovery  
-3. 10 rapid-fire answers (30-second each) for screening rounds
+
+
+
+
+
+
+
+
+
+
+
+
+fuze-netsites-service — Business Process
+Documentation
+Audience: New team members with no prior knowledge of network site lease
+management.
+Last updated: May 2026
+Table of Contents
+1. Business Context
+2. Domain Glossary
+3. Core Business Processes
+- 3.1 Contract Lifecycle
+- 3.2 Payment Management
+- 3.3 Renewal & Option Terms
+- 3.4 Site & Parcel Management
+- 3.5 Document Management (NetDocs)
+- 3.6 Quality Control (QC) & Auditing
+- 3.7 Bulk Operations
+- 3.8 User & Access Management
+- 3.9 Data Refresh / Cache Management
+4. Key Business Rules
+5. Business Process Flow Diagrams
+6. Integration Points
+7. Reporting & Lookups
+1. Business Context
+What is a "NetSite"?
+A NetSite (Network Site) is a physical location — a rooftop, tower, utility pole, or ground parcel
+— where Verizon Wireless installs wireless network equipment (antennas, radios, base
+stations). Verizon does not own most of these locations outright; instead, it enters into lease
+agreements with the property owners (landlords). Each NetSite therefore represents both:
+- A physical location with geographic, parcel, and address attributes, and
+- A legal and financial relationship between Verizon and the site owner, governed by a
+contract.
+Managing thousands of these leases — tracking their terms, payments, renewals, and
+documents — is the core business problem this system solves.
+What is VZW Fuze?
+VZW Fuze is Verizon's internal platform for managing real estate and network infrastructure
+operations. It is a suite of interconnected microservices covering everything from site acquisition
+and contract management to payment processing and document storage.
+fuze-netsites-service is the central microservice responsible for network site lease
+contract management within that platform.
+Who Uses This Service?
+Role / Team What They Do
+Real Estate Managers Create and manage lease contracts for new
+and existing network sites
+Finance / Accounts Payable Set up payment terms, process rent
+payments, handle adjustments and refunds
+Lease Administration Monitor contract renewals, execute options,
+manage holdover situations
+Quality Control (QC) Team Review and audit contract data for accuracy
+and compliance
+Legal / Compliance Manage contract documents, notice
+recipients, and execution dates
+IT / Platform Engineers Maintain data integrity, run bulk updates, and
+refresh system caches
+What Problem Does It Solve?
+Without this service, Verizon would struggle to:
+- Track thousands of active site leases and their exact payment obligations
+- Automatically calculate rent adjustments tied to inflation (CPI)
+- Ensure payments go to the correct payee accounts on the correct dates
+- Maintain a complete, auditable history of every contract change
+- Manage the document lifecycle for lease agreements in a central repository
+This service provides a single, authoritative API for all of these operations, ensuring data
+accuracy and process consistency across the entire Verizon network site portfolio.
+2. Domain Glossary
+Term Definition
+Site A physical location where Verizon network
+equipment is installed. Identified by a site ID.
+Contract A legally binding lease agreement between
+Verizon and a property owner for the use of a
+specific site. Each contract has a unique
+contract number.
+Candidate A prospective site that has been identified for
+network deployment but does not yet have a
+fully executed lease contract. It is the first
+stage before a contract is created.
+Project A grouping of related site acquisition or
+construction activities. A contract may be
+associated with a project.
+Parcel A legally defined piece of land (identified by a
+parcel number / APN) associated with a site.
+A single site may span multiple parcels.
+Execution Date The date on which a lease contract was
+formally signed and became legally binding.
+Amendment A formal change to an existing contract —
+e.g. extending the term, changing rent, or
+adding new parcels.
+Lock / Unlock Preventing (locking) or allowing (unlocking)
+edits to a contract record. Contracts are
+typically locked once payments are finalised
+to prevent accidental changes.
+Term Definition
+Merge The process of combining or reconciling data
+from an external system (HQRE) into the
+NetSites database. A "merge" operation is an
+upsert — insert if new, update if existing.
+HQRE Headquarters Real Estate — Verizon's
+authoritative source-of-truth system for
+property and contract master data. Changes
+in HQRE are periodically merged into
+NetSites.
+Payment Term The agreed-upon rent amount, payment
+frequency (monthly, quarterly, annual), and
+effective date range for a contract.
+Commencement Date The date on which a payment term or a lease
+term begins — i.e. when rent payments start.
+Payee The entity (person or company) that receives
+the rent payment. This may be the direct
+landlord, a management company, or a
+trustee.
+Sublease Payee A secondary payee who receives a portion of
+rent in a sublease arrangement, where the
+primary tenant subleases part of the site.
+Payment Schedule A generated list of individual payment due
+dates and amounts derived from the payment
+terms and commencement date.
+Hold Payments A temporary suspension of rent payments for
+a contract, usually due to a dispute, pending
+execution, or legal hold. Tracked in hold
+payment reference records.
+Holdover A period in which a lease has technically
+expired but Verizon continues to occupy the
+site and make payments under the original
+terms while a new agreement is negotiated.
+Holdover logs track this status.
+Term Definition
+Special Payment A one-time or non-standard payment outside
+the normal rent schedule — e.g. a lease
+signing bonus, a co-location fee, or a
+retroactive adjustment.
+Abatement A temporary reduction or waiver of rent,
+typically granted by the landlord as a
+concession (e.g. during construction or as an
+incentive to sign).
+Payment Adjustment A correction applied to a past or future
+payment to account for errors, CPI increases,
+or renegotiated terms.
+Finalize Payments The process of confirming and closing out the
+payment schedule for a given period — after
+which payments are sent to accounts payable
+for disbursement.
+Refund Payment A payment made back to Verizon by the
+landlord — e.g. when overpayment is
+discovered or a lease is terminated early.
+Renewal Term A contractual clause that allows Verizon to
+extend the lease for an additional period (e.g.
+5 years) by exercising the renewal option.
+Option Term A specific renewal period defined in the
+contract, often with pre-negotiated rent rates.
+Verizon must formally "exercise" the option
+before a deadline to trigger it.
+CPI (Consumer Price Index) A government measure of inflation published
+by the U.S. Bureau of Labor Statistics (BLS).
+Many leases include rent escalation clauses
+tied to CPI changes.
+LRC (Lease Rate Change) The calculated change in rent resulting from a
+CPI escalation clause. LRC payment terms
+define the new rent amount after applying the
+CPI adjustment.
+Term Definition
+BLS Data Statistical data from the U.S. Bureau of Labor
+Statistics used to compute CPI-based rent
+adjustments. The system fetches series data
+and area-specific CPI figures.
+Audit Event A recorded entry that tracks who made a
+change to a contract record, what changed,
+and when. Provides a full, tamper-evident
+change history.
+QC Event A Quality Control review task assigned to a
+team member to verify the accuracy of
+contract data. QC events have a lifecycle:
+created → assigned → evaluated → closed.
+NetDocs Verizon's internal document management
+system (built on Documentum) where lease
+agreements, amendments, and related
+documents are stored and versioned.
+Documentum The enterprise content management platform
+underlying NetDocs. Stores and versions
+documents attached to contracts.
+File Tracker A system that tracks the physical or electronic
+status and location of document files as they
+move through the signing and archiving
+workflow.
+Notice Recipient A person or entity that must legally receive
+official notices (e.g. lease renewal notices,
+termination notices) related to a contract, as
+specified in the lease agreement.
+Regional Manager A Verizon Real Estate manager responsible
+for overseeing site contracts within a specific
+geographic region.
+Custom Attribute A flexible, user-defined data field that can be
+attached to a contract or site record to
+capture non-standard information specific to
+that deal.
+Term Definition
+Master Contract A parent-level contract that governs multiple
+individual site contracts — often used for
+portfolio deals where one landlord owns
+many sites.
+Associated Contract A contract that is linked to another contract
+(e.g. an amendment is associated with the
+original lease).
+Ownership Fields Data fields recording who owns the site
+property — the legal owner, any affiliate
+relationships, and any changes in ownership
+over time.
+DataCloud Verizon's internal framework for executing
+named SQL queries stored in the database,
+abstracting away raw JDBC complexity.
+Bulk Update An operation that modifies the same field(s)
+across many contracts simultaneously, rather
+than editing them one by one. Requires
+approval before execution.
+ERP Enterprise Resource Planning — the financial
+system (e.g. SAP) that ultimately processes
+and disburses the rent payments generated
+by this service.
+GSAM A data classification for site, party, and
+contract records referring to their association
+with the GSAM (Global Site Asset
+Management) framework used for portfolio
+reporting.
+3. Core Business Processes
+3.1 Contract Lifecycle
+Step 1 — Candidate Site Creation
+Trigger: A network planning team identifies a location where a cell tower or small cell is
+needed.
+1. A Candidate record is created in the system (mergeNetsitesCandidate), capturing
+the proposed site address, region, project association, and initial property ownership
+details.
+2. The candidate is linked to a Project (mergeNetsitesProject) that groups related site
+work.
+3. Custom attributes may be added to capture deal-specific notes
+(mergeFUZECustomAttributes).
+Outcome: A candidate record exists in the system representing a prospective site, ready for
+lease negotiation.
+Step 2 — Contract Creation
+Trigger: Verizon negotiates and agrees on lease terms with the property owner.
+1. A new Contract record is created (NetsitesContractCreation), capturing the
+contract number, site ID, landlord/payee details, effective dates, and initial rent terms.
+2. The contract is associated with the candidate site and project.
+3. Payment Terms are set up (getPaymentTerms,
+mergeNetsitesPaytermCommencement) defining rent amount, frequency, and start
+date.
+4. Payees are recorded (NetSitesPayees) specifying who receives payments and to
+which account.
+5. Notice Recipients are added (mergeNetSitesNoticeRecipient) for legal
+notification obligations.
+6. Parcels are linked (NetSitesInsertParcel) to record which land parcels are
+covered.
+7. Contract documents are uploaded to NetDocs (saveContractDocumentDetails).
+Outcome: A fully configured contract record with payment terms, documents, and associated
+parties.
+Step 3 — Contract Amendment
+Trigger: A change in lease terms is agreed (rent renegotiation, term extension, parcel addition,
+etc.).
+1. An Amendment record is created (NetsitesContractAmendment) linked to the
+original contract.
+2. Affected fields are updated — payment terms, parcels, option terms, custom attributes.
+3. New documents reflecting the amendment are uploaded to NetDocs.
+4. An Audit Event is recorded capturing what changed, by whom, and when.
+Outcome: The contract record reflects the amended terms while preserving full history of all
+prior versions.
+Step 4 — Contract Execution
+Trigger: The lease or amendment is fully signed by all parties.
+1. The Execution Date is recorded on the contract (NetSitesContractExecResp).
+2. The contract status is updated to "Executed."
+3. The payment schedule is generated based on the commencement date and payment
+terms.
+4. The contract is Locked (ContractLock / MergeNetsitesLockUnlock) to prevent
+inadvertent edits.
+Outcome: An active, locked, executed contract with a live payment schedule.
+Contract Locking and Unlocking
+- Lock: Applied after execution or payment finalization. Prevents edits to critical fields.
+Recorded in the lock/unlock audit log.
+- Unlock: Requires authorisation. Applied when a correction or amendment must be
+made to a locked contract. The contract is re-locked after the change.
+- Both operations are tracked with the requesting user's identity and timestamp.
+Contract Merging / Consolidation
+Trigger: Bulk data synchronisation from the HQRE source-of-truth system, or manual
+consolidation of duplicate records.
+1. The HQRE system sends a batch of contract/site data payloads (List<HQREInfo>).
+2. The mergeNetsitesContract operation performs an upsert — if a contract with that
+ID already exists it is updated; otherwise a new one is created.
+3. Associated data (custom attributes, notice recipients, parcels) is merged in the same
+batch.
+Outcome: The NetSites database stays in sync with the HQRE master data system.
+3.2 Payment Management
+Setting Up Payment Terms and Commencement Dates
+1. After contract creation, a Payment Term record is created specifying: rent amount,
+payment frequency (monthly / quarterly / annual), effective start and end dates, and the
+payment method code (e.g. ACH, check).
+2. The Commencement Date (mergeNetsitesPaytermCommencement) is set as the
+date from which rent calculations begin.
+3. If the lease has a LRC (Lease Rate Change) clause, LRC payment terms are
+configured separately (LrcPaymentTerms, LrcTermCommencement).
+Outcome: The system knows exactly when rent starts, how much is owed, and how often
+payments must be made.
+Payment Schedule Generation
+1. The system uses the payment terms and commencement date to generate a list of
+individual payment due dates and amounts.
+2. The schedule is stored and viewable via GetNetsitesPaymentsFull /
+getNetSitesPayments.
+3. Schedules can be validated for conflicts before finalisation
+(checkScheduleInvalidRequest).
+Outcome: A complete, date-by-date rent payment schedule for the life of the contract.
+Payment History Tracking
+- All payments that have been made are recorded in the payment history
+(GetNetsitesPaymentHist, GetNetsitesPaymentHistFull).
+- Users can query full or summarised payment history for any contract.
+- The history provides the information needed for reconciliation with the ERP / accounts
+payable system.
+Payment Adjustments and Special Payments
+- Adjustments (GetNetSitesPaymentAdjustmentLog,
+MergeNetSitesPaymentUpdates) correct amounts for specific payment periods —
+e.g. when a retroactive CPI increase is applied.
+- Special Payments (MergeNetSitesSpecialPmts, SpecialPmtsBreakdown)
+handle one-off payments outside the regular schedule — signing bonuses, construction
+fees, or settlement payments.
+- All adjustments are logged with reason codes and user attribution.
+Hold Payments & Holdover Logs
+- Hold Payments (HoldPmtsSelectRequest, MergeNetsitesHoldPmtRef)
+temporarily suspend scheduled payments — for example, when a lease is being
+renegotiated or there is a legal dispute.
+- Holdover Logs (GetNetsitesHoldOverLogs) track periods where the lease has
+expired but the site is still occupied under holdover terms, so payments continue at a
+potentially different rate.
+Finalizing Payments / Refund Payments
+- Finalize (NetsitesFinalizePmts): Confirms and closes the payment schedule for a
+period, sending it downstream for ERP disbursement. Once finalized, the contract is
+locked.
+- Refund (MergeNetsitesRefundPayment): Records a payment made back to
+Verizon, such as overpayment recovery or early termination credit.
+3.3 Renewal & Option Terms
+Adding and Managing Renewal Terms
+1. During contract creation or amendment, Renewal Terms (NetSitesRenewalTerms)
+are recorded — e.g. "Verizon may renew for three 5-year periods."
+2. Each renewal term specifies the start date, duration, and rent amount or escalation
+formula.
+3. Terms are managed via mergeRenewalTerms, and can be deleted in bulk
+(NetSitesRenewalTermsDeleteAll).
+Option Terms Management
+1. Option Terms (MergeNetSitesOptionTerms) are specific contractual renewal
+election windows — dates by which Verizon must notify the landlord of its intent to
+exercise a renewal.
+2. When Verizon elects to renew, the option commencement date is set
+(MergeNetSitesOptionTermsCommence), activating the next lease period.
+3. Unneeded option terms can be deleted individually or in bulk
+(NetSitesOptionTermsDeleteAll).
+CPI Adjustments on Renewal
+1. Many leases include a rent escalation clause tied to the Consumer Price Index (CPI).
+2. The system fetches current CPI data from the U.S. Bureau of Labor Statistics
+(BLSDataRequest / BLSDataResponse, area series data CpiAreaSeries,
+CpiAreaData).
+3. A CPI calculation (CPICalRequest, ContractCPIHistoryRequest) computes the
+new rent amount by applying the percentage change in CPI to the current rent.
+4. The resulting LRC (Lease Rate Change) payment terms are stored and a new payment
+schedule is generated.
+Outcome: Rent is automatically adjusted in line with inflation at each renewal, as required by
+the lease.
+3.4 Site & Parcel Management
+Managing Site Parcels and Property Details
+- Each site is linked to one or more Parcels — legally described pieces of land with APN
+(Assessor's Parcel Number) identifiers.
+- Parcels can be inserted (NetSitesInsertParcel), updated
+(UpdateNetSitesParcels), or merged (MergeNetSitesParcels) as property
+boundaries change.
+- The GSAM records (NetSitesSiteGSAM, NetSitesPartyGSAM,
+NetSitesContractGSAM) link sites to the broader portfolio management framework.
+Temporary Equipment Tracking
+- When construction or temporary installations are placed at a site, Temporary
+Equipment records (NetSitesTempEquipment, GetNetSitesTempEquipment)
+track what is on-site, when it was placed, and when it will be removed.
+- This ensures billing for temporary equipment is separate from the permanent lease
+obligations.
+Address Details Lookup
+- The system can validate and enrich a site address (getAddressDetails) using the
+GetAddressProcedure — looking up geocoordinates, standardising the address
+format, and verifying municipality/county data.
+- Dropdown lookups for city (NetsitesGetDropdownCityRequest) and county
+(NetsitesGetDropdownCountyRequest) ensure standardised address entry.
+3.5 Document Management (NetDocs)
+Uploading and Retrieving Contract Documents
+1. Signed lease agreements, amendments, and supporting documents are uploaded
+(documentUpload via DocumentServiceClient) and linked to a contract in
+NetDocs.
+2. Document metadata (file name, document type, upload date, uploader) is saved
+alongside the file (saveDocumentDetails, saveContractDocumentDetails).
+3. Documents can be retrieved by document ID (getDocumentGet) and presented to
+users for review.
+Documentum Audit Trail and History
+- Every time a document is created, moved, revised, or viewed, NetDocs records the
+event.
+- The Audit Trail (NetDocsAuditTrail, getNetDocsAuditTable) shows who
+accessed or modified each document and when.
+- Document History (NetDocsHistory, getNetDocsHistoryTable) shows prior
+versions of a document, enabling users to review what a contract looked like before an
+amendment.
+File Tracker Integration
+- File Tracker (NetSitesFileTrackerRequest) monitors the physical/electronic
+movement of contract files through the review and signing workflow — e.g. "sent to
+landlord," "received signed," "archived."
+- This provides end-to-end visibility into whether a document is still awaiting signature or
+has been fully executed and stored.
+3.6 Quality Control (QC) & Auditing
+QC Audit Event Creation and Assignment
+1. A QC Audit (MergeNetsitesQcAudit) is created when a contract record or payment
+schedule requires formal review — triggered by a change, a regular audit cycle, or a
+data discrepancy flag.
+2. The audit is assigned (AuditAssignRequest, qcAuditAssignRequest) to a
+specific QC analyst who is responsible for reviewing it.
+Evaluating and Updating QC Events
+1. The assigned analyst reviews the contract data, comparing it against source documents.
+2. Findings are recorded as QC Events (MergeNetsitesQcEvent,
+UpdateNetsitesQcEvent) — each event describes what was checked, the finding
+(pass / fail / exception), and any corrective action taken.
+3. Events can go through multiple update cycles (UpdateNetsitesQcEvent2,
+UpdateNetsitesQcEventEval) as corrections are made and verified.
+4. Once all issues are resolved, the QC audit is closed.
+Audit Trail Review
+- Every data change — contract updates, payment adjustments, document uploads, QC
+actions — is recorded as an Audit Event with the user, timestamp, and before/after
+values.
+- This provides a complete, tamper-evident history required for legal and regulatory
+compliance.
+- Users can query the full audit history for any contract at any time.
+3.7 Bulk Operations
+Bulk Contract Updates
+Trigger: A change needs to be applied to many contracts simultaneously — e.g. a
+portfolio-wide rate change or a data correction affecting a class of sites.
+1. An authorised user defines the fields to update (BulkUpdateFields) and the set of
+contract numbers to target.
+2. The bulk update record is inserted into a staging table (NetsitesInsBulkUpdTable)
+for tracking.
+3. An approval workflow is triggered (NetSitesBulkUpdateApproval) — a second
+authorised user must review and approve the change before it is executed.
+4. Upon approval, the BulkServiceClient calls the bulk-upload-service
+(bulkContractNbrInsert) to apply the changes at scale.
+5. The bulk update table (NetsitesGetBulkUpdTable) tracks the status of each record
+in the batch.
+Outcome: Hundreds or thousands of contracts are updated in a single controlled operation,
+with full audit trail and approval gate.
+Script Execution via Bulk Service
+- For complex data migration scenarios, SQL scripts can be submitted for execution via
+executeScripts (ScriptExecutionRequest / ScriptExecutionResponse).
+- This is used by platform engineers for one-off data corrections that cannot be expressed
+as a standard bulk update.
+3.8 User & Access Management
+User Login and Registration
+- When a user first accesses the platform, a Login procedure (LoginProcedure)
+validates their credentials against the Oracle user store.
+- New users are registered via RegisterUserProcedure, creating a user profile linked
+to their roles and privileges.
+Fetching User Roles and Privileges
+- The system enforces role-based access control. On every API request, the user header
+(containing the logged-in user's identity) is validated by RequestFilter.
+- User roles (getUserRolesRequest) and privileges (getUserPrivilegeRequest)
+are loaded from the cache and checked before sensitive operations are allowed — e.g.
+only Finance team members can finalise payments; only managers can approve bulk
+updates.
+Notice Recipient Management
+- For each contract, the lease specifies which parties must receive formal legal notices
+(e.g. renewal election notices, termination notices).
+- Notice Recipients (NetSitesNoticeRecipient) are added, updated, or removed as
+the contract lifecycle progresses (mergeNetSitesNoticeRecipient,
+mergeNetSitesNoticeRecipientForAll).
+- This ensures Verizon meets its legal notification obligations.
+Regional Manager Assignment
+- Contracts are assigned to a Regional Manager who is responsible for their oversight.
+- Regional manager data (GetNetsitesRegionalManagers,
+NetSitesRegionalManagerResp) allows querying which managers own which
+contracts and facilitates workload distribution and reporting.
+3.9 Data Refresh / Cache Management
+What the Cache Holds
+The CachedResultsDao loads and holds in memory:
+- System-level configuration settings and feature flags
+- User, role, and privilege reference data
+- Lookup / reference tables (payment method codes, status codes, contract types)
+- Any other frequently read, rarely changing data that would otherwise require a database
+round-trip on every API call
+Why it matters: The system handles hundreds of concurrent requests. Caching these lookup
+tables eliminates thousands of repetitive database queries per minute, dramatically improving
+response times.
+When to Refresh the Cache
+The cache is loaded automatically at startup by LoadDataCloudOnStartup. However, if an
+administrator changes a system setting, role definition, or lookup table value in the database,
+those changes will not be visible to the running service until the cache is refreshed.
+The /fuze-netsites-service/datacloud/refresh endpoint triggers a manual refresh
+— re-running all cache queries and reloading the DataCloud SQL registry — without requiring a
+service restart.
+When to call it: After any change to system configuration tables, reference data, or
+the SQL query registry in Oracle.
+4. Key Business Rules
+1. Payments cannot be finalised on an unlocked contract. A contract must pass
+through the lock workflow before the payment schedule is submitted to accounts
+payable, preventing mid-stream edits to payment amounts.
+2. CPI rent escalations use official BLS data. The system does not allow manual CPI
+percentage input for escalation calculations — it must fetch the official index values from
+the Bureau of Labor Statistics data feed, ensuring regulatory and audit compliance.
+3. Every request must carry a valid user identity. The user HTTP header is mandatory
+on all API calls. Requests without a valid, authenticated user are rejected with a 401
+Unauthorized response before reaching any business logic.
+4. Bulk updates require a two-step approval. No bulk contract modification can be
+executed without a second authorised approver — preventing accidental or unauthorised
+mass changes to the contract portfolio.
+5. Merges are upserts — they never hard-delete. The merge operation from HQRE
+always inserts or updates; it does not delete existing records. Data integrity is preserved
+even if a record disappears from the source feed temporarily.
+6. Notice recipients are contract-specific, not global. Each contract maintains its own
+list of notice recipients; a change to one contract's recipient list does not affect any other
+contract.
+7. Contract locking is user-attributed and logged. Every lock and unlock action records
+the user who performed it and the timestamp, creating an auditable trail of who had write
+access and when.
+8. Option terms must be exercised before a deadline. The system tracks option
+exercise windows. If an option is not actioned before the contractual deadline, it lapses
+and the renewal right is lost.
+9. Holdover status continues payment obligations. A contract in holdover status
+remains financially active — payments continue to be scheduled and processed — even
+though the original lease term has expired.
+10. Document uploads require a contract linkage. Documents saved via NetDocs must
+be associated with a contract record (saveContractDocumentDetails); orphaned
+documents are not permitted in the workflow.
+11. CyberArk vault is used for database credentials in production. The database
+password is never stored in plain text in production environments — it is retrieved at
+runtime from a CyberArk secrets vault, controlled by the is_cyberark_enabled flag.
+12. Custom attributes are flexible but audited. Contracts may carry any number of
+user-defined custom attributes (mergeFUZECustomAttributes), but all attribute
+changes are recorded in the audit history.
+None
+None
+5. Business Process Flow Diagrams
+Contract Lifecycle
+flowchart TD
+ A([Start: Site Identified]) --> B[Create Candidate Site]
+ B --> C[Create Project]
+ C --> D[Negotiate Lease Terms]
+ D --> E[Create Contract Record]
+ E --> F[Set Up Payment Terms & Payees]
+ F --> G[Add Parcels & Notice Recipients]
+ G --> H[Upload Contract Documents to NetDocs]
+ H --> I{Amendment Needed?}
+ I -- Yes --> J[Create Amendment Record]
+ J --> K[Update Terms / Parcels / Documents]
+ K --> I
+ I -- No --> L[Record Execution Date]
+ L --> M[Generate Payment Schedule]
+ M --> N[Lock Contract]
+ N --> O([Contract Active & Locked])
+ O --> P{Change Required?}
+ P -- Yes --> Q[Unlock Contract]
+ Q --> J
+ P -- No --> R([Contract Remains Active])
+Payment Lifecycle
+flowchart TD
+ A([Contract Executed]) --> B[Configure Payment Terms]
+ B --> C[Set Commencement Date]
+ C --> D[Generate Payment Schedule]
+ D --> E{Adjustment Needed?}
+ E -- CPI Escalation --> F[Fetch BLS Data]
+ F --> G[Calculate LRC / New Rent]
+ G --> H[Update Payment Terms]
+ H --> E
+ E -- Special Payment --> I[Add Special Payment Record]
+ I --> E
+ E -- Hold Required --> J[Apply Hold Payment]
+ J --> K{Hold Lifted?}
+None
+ K -- No --> J
+ K -- Yes --> L[Resume Schedule]
+ L --> E
+ E -- No Changes --> M[Finalize Payments]
+ M --> N[Lock Contract]
+ N --> O([Payments Sent to ERP/AP])
+ O --> P{Refund Required?}
+ P -- Yes --> Q[Record Refund Payment]
+ Q --> R([Closed])
+ P -- No --> R
+QC Audit Lifecycle
+flowchart TD
+ A([Trigger: Change / Audit Cycle / Discrepancy]) --> B[Create QC Audit Record]
+ B --> C[Assign to QC Analyst]
+ C --> D[Analyst Reviews Contract Data]
+ D --> E[Record QC Event with Finding]
+ E --> F{Issue Found?}
+ F -- Yes --> G[Log Corrective Action Required]
+ G --> H[Team Makes Correction to Contract]
+ H --> I[Analyst Re-evaluates]
+ I --> F
+ F -- No / Resolved --> J[Update QC Event: Pass]
+ J --> K{All Events Resolved?}
+ K -- No --> D
+ K -- Yes --> L[Close QC Audit]
+ L --> M([Audit Complete — Full Trail Recorded])
+6. Integration Points
+Events Service (events-service)
+- What it does: Receives audit event comments and stores them in the central event log.
+- Why it matters: When a significant contract action occurs (amendment, payment
+finalisation, lock/unlock), a comment is posted to the Events Service via
+mergeEventComments. This provides a cross-system timeline of all activity on a site or
+contract, visible to all teams across the Fuze platform — not just real estate users.
+Bulk Service (bulkService / bulk-upload-service)
+- What it does: Handles large-scale data operations that would be too heavyweight to run
+inline in a web request.
+- Why it matters: Updating 10,000 contracts one-at-a-time through the normal API would
+time out. The Bulk Service accepts a batch of contract numbers and a change payload,
+processes them offline, and reports results back. It also handles SQL script execution for
+platform engineers during data migrations.
+Document Service / NetDocs (documentService)
+- What it does: Stores, retrieves, and manages the documents attached to lease
+contracts.
+- Why it matters: Lease agreements are legal documents that must be stored securely,
+versioned, and auditable. The Document Service abstracts the underlying Documentum
+content management platform. Fuze-netsites-service calls it to upload new contracts
+(documentUpload), retrieve signed copies (getDocumentGet), and move files
+between workflow stages (moveDocument).
+Oracle Database
+- What it holds: All master contract data, payment terms and history, site and parcel
+records, user and role data, QC audit trails, system configuration, and SQL query
+definitions (used by the DataCloud framework).
+- Why it matters: Oracle is the authoritative persistent store for all business data. The
+DataCloud framework dynamically loads SQL queries from the database at runtime,
+meaning SQL can be tuned or corrected by DBAs without requiring a software
+deployment.
+Eureka Service Registry
+- What it does: Acts as a phone book for microservices. Every Fuze microservice
+registers itself with Eureka when it starts up, advertising its network address.
+- Why it matters: Instead of hard-coding the IP addresses of the Events Service, Bulk
+Service, and Document Service, fuze-netsites-service looks them up by name
+from Eureka at runtime. If a downstream service is scaled up (more instances added),
+Ribbon automatically load-balances calls across all healthy instances — with no
+configuration change required.
+7. Reporting & Lookups
+Available Reports
+The system provides a report list (GetNetSiteReportList) that enumerates the standard
+reports available to users, such as:
+- Active contracts by region
+- Contracts approaching renewal deadline
+- Payments due in a given period
+- Holdover sites
+- QC audit status summaries
+Reports are generated by querying the Oracle database using the DataCloud query framework
+and returned as structured JSON to be rendered by the front-end application.
+Dropdown Lookups
+The following lookup endpoints provide standardised reference data for UI dropdowns, ensuring
+data consistency across all contract records:
+Lookup Request Model Response Model Purpose
+City NetsitesGetDropd
+ownCityRequest
+NetsitesGetDropd
+ownCityResponse
+Standardised city
+names for site
+address entry
+County NetsitesGetDropd
+ownCountyRequest
+NetsitesGetDropd
+ownCountyRespons
+e
+County names for
+site address and
+parcel entry
+Contract GetNetsitesContr
+acts
+— List of contract
+numbers for
+association/search
+Lookup Request Model Response Model Purpose
+Master Contract MasterContractDr
+opdown
+— Master contract list
+for portfolio grouping
+Contract Number
+Restrictions
+GetNetSitesContr
+actNbrRestrictio
+ns
+— Which contract
+numbers are
+restricted/reserved
+Summary Views
+The Summary View (NetsitesViewSummary, NetSitesViewSummResp) provides a
+consolidated, at-a-glance snapshot of a contract's current state, including:
+- Contract identification details (number, site, region)
+- Current lease term and execution status
+- Active payment term summary (current rent, frequency, next due date)
+- Renewal/option term status and upcoming exercise deadlines
+- Outstanding QC audit status
+- Recent document activity
+This view is the primary landing page for a Real Estate Manager reviewing a specific site
+contract.
+
+
