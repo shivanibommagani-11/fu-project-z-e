@@ -157,10 +157,2238 @@ ACID Compliance: If anything fails during the database update, it triggers a db.
 Aggregation: The tool passes the execution metrics (Total Records, Successful, Failed, and specific Error Messages) back to the Agent. 
 The Response: The Agent formats this raw data into a clean, human-readable Markdown summary (e.g., ":white_check_mark: Bulk Termination Completed Successfully! 50 Terminated, 2 Failed") and sends it back to the chat UI so the user knows exactly what happened. 
 Bommagani Shivani  [12:39 PM]
+----------------------------------------------------------------------------------------------
+
+execution date api details
+UPDATE INTRANET.CONTRACT
+SET EXECUTION_DT = TO_DATE('01-MAY-2001 ' || TO_CHAR(EXECUTION_DT, 'HH24:mi:SS'), 'DD-MON-YYYY HH24:mi:SS')
+WHERE CONTRACT_NBR = 82468
+AND AMMENDMENT_NBR = 0;
+api updateNetsiesContractExecutionDt
+curl to run in postman:
+curl --location 'http://localhost:9071/netsites-service/netsites/updateNetsitesContractExecutionDt' \
+--header 'accept: application/json' \
+--header 'user: {"userId":"cheetma"}' \
+--header 'Content-Type: application/json' \
+--data '{
+  "contractNbr": 11232,
+  "ammendmentNbr": 1,
+  "executionDt": "31-Jan-2028"
+}'
+
+
+-------------------------------
+
+
+bulk procedure names :
+
+
+BULK_ADD_NOTICE_REC
+BULK_ADD_OWNER
+BULK_ADD_OWNER_1
+BULK_DEL_NOTICE_REC
+BULK_GET_NOTICE_REC
+BULK_GET_OWNER
+BULK_REPLACE_NOTICE_REC
+BULK_UPDATE_COMMENT
+BULK_UPDATE_CUSTOM_ATTR
+BULK_UPDATE_FACILITY
+BULK_UPDATE_FIELDS_WRAPPER
+BULK_UPDATE_MASTER
+BULK_UPDATE_SITE_CONTROL
+BULK_UPDATE_TERMINATION
+BULK_UPDATE_WRAPPER
+SP_BULK_DISH_SUBLEASE_TERMINATE
+SP_BULK_PAYMENT_HOLD
 
 
 
+NETSITES Schema -
 
+Special Payments -
+PG_PMTS Package, in that procedure name is special_pmt_ins_fuze_new()
+
+Bulk Termination -
+PG_FUZE_BULK_UPD Package, in that procedure name is sp_bulk_dish_sublease_terminate()[10:34 AM]sp_bulk_payment_hold() - this is for bulk bulk payment hold
+
+-----------------------------------------------------------------------------
+bulk_updates_package_declaration:
+CREATE OR REPLACE PACKAGE NETSITES."PG_FUZE_BULK_UPD" 
+AS
+    TYPE ref_cur IS REF CURSOR;
+    
+    TYPE trc_latest_event IS REF CURSOR;
+
+    TYPE array_t IS VARRAY (500) OF VARCHAR2 (20);
+
+    PROCEDURE bulk_update_wrapper (sourcetype                 VARCHAR2,
+                                   actiontype                 VARCHAR2,
+                                   updatedatajson             CLOB,
+                                   contract_nbrlistjson       CLOB,
+                                   userid                     VARCHAR2,
+                                   o_ref_cur              OUT ref_cur);
+
+    PROCEDURE bulk_update_fields_wrapper (
+        sourcetype                 VARCHAR2,
+        actiontype                 VARCHAR2,
+        updatedatajson             CLOB,
+        contract_nbrlistjson       CLOB,
+        userid                     VARCHAR2,
+        o_ref_cur              OUT ref_cur);
+
+    PROCEDURE bulk_replace_notice_rec (jsondata               IN     CLOB,
+                                   contract_nbrlistjson          CLOB,
+                                   userid                        VARCHAR2,
+                                   o_ref_cur                 OUT ref_cur);
+                                   
+     PROCEDURE bulk_add_notice_rec (jsondata               IN     CLOB,
+                                   contract_nbrlistjson          CLOB,
+                                   userid                        VARCHAR2,
+                                   o_ref_cur                 OUT ref_cur);
+
+    PROCEDURE bulk_update_termination (
+        jsondata               IN     CLOB,
+        contract_nbrlistjson          CLOB,
+        userid                        VARCHAR2,
+        o_ref_cur                 OUT ref_cur);
+
+    PROCEDURE bulk_update_comment (jsondata               IN     CLOB,
+                                   contract_nbrlistjson          CLOB,
+                                   userid                        VARCHAR2,
+                                   o_ref_cur                 OUT ref_cur);
+
+    PROCEDURE bulk_update_master (jsondata               IN     CLOB,
+                                  contract_nbrlistjson          CLOB,
+                                  userid                        VARCHAR2,
+                                  o_ref_cur                 OUT ref_cur);
+
+    PROCEDURE bulk_update_facility (jsondata               IN     CLOB,
+                                    contract_nbrlistjson          CLOB,
+                                    userid                        VARCHAR2,
+                                    o_ref_cur                 OUT ref_cur);
+
+    PROCEDURE bulk_update_custom_attr (jsondata               IN CLOB,
+                                       contract_nbrlistjson      CLOB,
+                                       userid                    VARCHAR2);
+
+    PROCEDURE bulk_update_site_control (
+        jsondata               IN     CLOB,
+        contract_nbrlistjson          CLOB,
+        userid                        VARCHAR2,
+        o_ref_cur                 OUT ref_cur);
+
+    PROCEDURE bulk_del_notice_rec (jsondata               IN     CLOB,
+                                   contract_nbrlistjson          CLOB,
+                                   userid                        VARCHAR2,
+                                   o_ref_cur                 OUT ref_cur);
+
+    PROCEDURE bulk_get_notice_rec (contract_nbrlistjson   IN     CLOB,
+                                   o_ref_cur                 OUT ref_cur);
+
+    PROCEDURE bulk_get_owner (contract_nbrlistjson   IN     CLOB,
+                              o_ref_cur                 OUT ref_cur);
+
+    PROCEDURE bulk_add_owner_1 (jsondata               IN     CLOB,
+                                contract_nbrlistjson          CLOB,
+                                userid                        VARCHAR2,
+                                o_ref_cur                 OUT ref_cur);
+
+    PROCEDURE bulk_add_owner (jsondata               IN     CLOB,
+                              contract_nbrlistjson          CLOB,
+                              userid                        VARCHAR2,
+                              o_ref_cur                 OUT ref_cur);
+
+    PROCEDURE sp_bulk_dish_sublease_terminate (
+        p_contract_nbr_list IN CLOB,
+        p_termination_dt    IN DATE     DEFAULT TO_DATE('12-JUN-2026', 'DD-MON-YYYY'),
+        p_termination_code  IN VARCHAR2 DEFAULT 'LANDLORD',
+        p_contract_desc     IN VARCHAR2 DEFAULT 'Terminated by VZ for default Dish did not cure. SRS 7/24/26',
+        p_user_id           IN VARCHAR2 DEFAULT 'sztuksa',
+        o_processed_count   OUT NUMBER
+    );
+    
+    PROCEDURE sp_bulk_payment_hold(
+        p_contract_nbr_list     IN CLOB,
+        p_payee_chk_memo_text   IN VARCHAR2,
+        p_hold_comment          IN VARCHAR2,
+        p_hold_payment_reason   IN VARCHAR2,
+        p_stream_hold           IN VARCHAR2,
+        p_accrual_status        IN VARCHAR2,
+        p_mdg_number            IN VARCHAR2,
+        p_user_id               IN VARCHAR2,
+        o_processed_count       OUT NUMBER
+    );
+END pg_fuze_bulk_upd;
+
+
+---------------------------------------------------------------------
+bulk updates package body :
+
+
+CREATE OR REPLACE PACKAGE BODY NETSITES."PG_FUZE_BULK_UPD" 
+AS
+    PROCEDURE bulk_update_wrapper (sourcetype                 VARCHAR2,
+                                   actiontype                 VARCHAR2,
+                                   updatedatajson             CLOB,
+                                   contract_nbrlistjson       CLOB,
+                                   userid                     VARCHAR2,
+                                   o_ref_cur              OUT ref_cur)
+    AS
+    BEGIN
+        IF sourcetype = 'NOTICE_RECIPIENT'
+        THEN
+            DBMS_OUTPUT.put_line ('sourceType: ' || sourcetype);
+
+            IF actiontype = 'REPLACE'
+            THEN
+                DBMS_OUTPUT.put_line ('actiontype: ' || actiontype);
+                bulk_replace_notice_rec (updatedatajson,
+                                         contract_nbrlistjson,
+                                         userid,
+                                         o_ref_cur);
+            ELSIF actiontype = 'ADD'
+            THEN
+                DBMS_OUTPUT.put_line ('actiontype: ' || actiontype);
+                bulk_add_notice_rec (updatedatajson,
+                                     contract_nbrlistjson,
+                                     userid,
+                                     o_ref_cur);
+            ELSIF actiontype = 'GET'
+            THEN
+                bulk_get_notice_rec (contract_nbrlistjson, o_ref_cur);
+            ELSIF actiontype = 'DEL'
+            THEN
+                bulk_del_notice_rec (updatedatajson,
+                                     contract_nbrlistjson,
+                                     userid,
+                                     o_ref_cur);
+            END IF;
+        ELSIF sourcetype = 'OWNER'
+        THEN
+            DBMS_OUTPUT.put_line ('sourceType: ' || sourcetype);
+
+            IF actiontype = 'ADD' OR actiontype = 'REPLACE'
+            THEN
+                DBMS_OUTPUT.put_line ('actiontype: ' || actiontype);
+                bulk_add_owner (updatedatajson,
+                                contract_nbrlistjson,
+                                userid,
+                                o_ref_cur);
+            ELSIF actiontype = 'GET'
+            THEN
+                bulk_get_owner (contract_nbrlistjson, o_ref_cur);
+            END IF;
+        END IF;
+    END bulk_update_wrapper;
+
+    PROCEDURE bulk_update_fields_wrapper (
+        sourcetype                 VARCHAR2,
+        actiontype                 VARCHAR2,
+        updatedatajson             CLOB,
+        contract_nbrlistjson       CLOB,
+        userid                     VARCHAR2,
+        o_ref_cur              OUT ref_cur)
+    AS
+    BEGIN
+        IF sourcetype = 'MAIN'
+        THEN
+            IF actiontype = 'TERMINATE'
+            THEN
+                bulk_update_termination (updatedatajson,
+                                         contract_nbrlistjson,
+                                         userid,
+                                         o_ref_cur);
+            ELSIF actiontype = 'COMMENT'
+            THEN
+                bulk_update_comment (updatedatajson,
+                                     contract_nbrlistjson,
+                                     userid,
+                                     o_ref_cur);
+            ELSIF actiontype = 'MASTER'
+            THEN
+                bulk_update_master (updatedatajson,
+                                    contract_nbrlistjson,
+                                    userid,
+                                    o_ref_cur);
+            ELSIF actiontype = 'FACILITY'
+            THEN
+                bulk_update_facility (updatedatajson,
+                                      contract_nbrlistjson,
+                                      userid,
+                                      o_ref_cur);
+            ELSIF actiontype = 'SITECONTROL'
+            THEN
+                bulk_update_site_control (updatedatajson,
+                                          contract_nbrlistjson,
+                                          userid,
+                                          o_ref_cur);
+            END IF;
+
+            IF sourcetype = 'CUSTOMATTR'
+            THEN
+                bulk_update_custom_attr (updatedatajson,
+                                         contract_nbrlistjson,
+                                         userid);
+            END IF;
+        END IF;
+    END bulk_update_fields_wrapper;
+
+    PROCEDURE bulk_replace_notice_rec (jsondata                   CLOB,
+                                       contract_nbrlistjson       CLOB,
+                                       userid                     VARCHAR2,
+                                       o_ref_cur              OUT ref_cur)
+    AS
+        i_counter             NUMBER;
+        i_flag_set            NUMBER;
+        i_contract_id         NUMBER;
+        i_party_oldid         NUMBER;
+        i_party_id            NUMBER;
+        i_party_oldtp         VARCHAR2 (20);
+        i_party_tp            VARCHAR2 (20);
+        i_qc_category_type    NUMBER;
+        i_eventid             NUMBER;
+        o_trc_latest_event    trc_latest_event;
+        v_eventid             intranet.qc_event.eventid%TYPE := NULL;
+        v_auditid             intranet.qc_audit.auditid%TYPE := NULL;
+        c_obj_name   CONSTANT VARCHAR2 (200) := app_log.who_am_i;
+
+        i_array_t_failure     array_t;
+
+        TYPE t_tab IS TABLE OF NUMBER;
+
+        l_tab1                t_tab := t_tab ();
+
+        CURSOR cur IS
+            WITH
+                tmp
+                AS
+                    (SELECT jt.*
+                       FROM JSON_TABLE (
+                                jsondata,
+                                '$.jsonData.noticeRec[*]'
+                                COLUMNS (
+                                    id FOR ORDINALITY,
+                                    partyoldid NUMBER PATH '$.partyOldId',
+                                    partyid NUMBER PATH '$.partyId',
+                                    partyoldtp
+                                        VARCHAR2 (20)
+                                        PATH '$.partyOldTp',
+                                    partytp VARCHAR2 (20) PATH '$.partyTp',
+                                    qccategory NUMBER PATH '$.qcCategory',
+                                    eventid NUMBER PATH '$.eventId',
+                                    NESTED PATH '$.contractNumberArr[*]'
+                                        COLUMNS (
+                                            contractNum_ID FOR ORDINALITY,
+                                            contractid PATH '$.contractNum')))
+                            jt)
+            SELECT DISTINCT partyoldid,
+                            partyid,
+                            partyoldtp,
+                            partytp,
+                            qccategory,
+                            eventid,
+                            contractNum_ID,
+                            contractid
+              FROM tmp;
+    BEGIN
+        DBMS_APPLICATION_INFO.set_client_info (userid);
+        DBMS_APPLICATION_INFO.set_module (
+            'Bulk notice add - ' || TRUNC (SYSDATE),
+            '');
+
+        i_array_t_failure := NEW array_t ();
+
+
+        i_counter := 0;
+        i_flag_set := 0;
+
+        FOR rec IN cur
+        LOOP
+            BEGIN
+                --                DBMS_OUTPUT.put_line ('Contract ID: ' || rec.contractid);
+                v_eventid := NULL;
+
+                --Get latest QC_Event
+
+                IF rec.eventid IS NULL
+                THEN
+                    BEGIN
+                        --                        NETSITES.PG_QC.GET_LATEST_EVENT (
+                        --                            I_CONTRACT_SAID      =>
+                        --                                pg_contract.get_cur_contract (
+                        --                                    TO_NUMBER (rec.contractid)),
+                        --                            I_QC_CATEGORY_TYPE   => rec.qccategory,
+                        --                            O_TRC_QC_EVENTS      => o_trc_latest_event);
+
+                        NETSITES.PG_QC.GET_LATEST_EVENT_FUZE (
+                            I_CONTRACT_SAID      =>
+                                pg_contract.get_cur_contract (
+                                    TO_NUMBER (rec.contractid)),
+                            I_QC_CATEGORY_TYPE   => rec.qccategory,
+                            I_USER_ID            => userid,
+                            O_TRC_QC_EVENTS      => o_trc_latest_event);
+
+                        --OPEN o_trc_latest_event;
+                        LOOP
+                            FETCH o_trc_latest_event
+                                INTO v_eventid, v_auditid;
+
+                            EXIT WHEN o_trc_latest_event%NOTFOUND;
+                        END LOOP;
+
+                        CLOSE o_trc_latest_event;
+                    EXCEPTION
+                        WHEN OTHERS
+                        THEN
+                            intranet.pkg_err.handle (SQLCODE,
+                                                     SQLERRM,
+                                                     TRUE,
+                                                     TRUE,
+                                                     c_obj_name,
+                                                     userid);
+                    END;
+                ELSE
+                    v_eventid := rec.eventid;
+                END IF;
+
+                DBMS_OUTPUT.put_line (
+                       'Contract ID: AND event id  QC '
+                    || rec.contractid
+                    || '-----'
+                    || rec.eventid
+                    || '----'
+                    || rec.qccategory
+                    || '--v_eventid--'
+                    || v_eventid);
+
+                BEGIN
+                    pg_notc.contact_insert_upd (
+                        i_contract_id        =>
+                            pg_contract.get_cur_contract (
+                                TO_NUMBER (rec.contractid)),
+                        i_party_oldid        => rec.partyoldid,
+                        i_party_id           => rec.partyid,
+                        i_party_oldtp        => rec.partyoldtp,
+                        i_party_tp           => rec.partytp,
+                        i_qc_category_type   => rec.qccategory,
+                        i_eventid            => v_eventid);
+                EXCEPTION
+                    WHEN OTHERS
+                    THEN
+                        DBMS_OUTPUT.put_line (
+                            'Exception Contract ID: ' || rec.contractid);
+                        i_flag_set := i_flag_set + 1;
+                        i_array_t_failure.EXTEND;
+                        i_array_t_failure (i_flag_set) := rec.contractid;
+                --                    open o_ref_cur for
+                --                       select * from table( i_array_t_failure ) ;
+                END;
+            EXCEPTION
+                WHEN OTHERS
+                THEN
+                    i_flag_set := i_flag_set + 1;
+            --                    DBMS_OUTPUT.put_line (
+            --                        'Exception2 Contract ID: ' || rec.contractid);
+            --                    i_array_t_failure.EXTEND;
+            --                    DBMS_OUTPUT.put_line ('Exception3  ID: ' || i_flag_set);
+            --                    i_array_t_failure (i_flag_set) := rec.contractid;
+            --                    DBMS_OUTPUT.put_line ('Exception4  ID: ' || i_flag_set);
+            --                    open o_ref_cur for
+            --                        select * from table( i_array_t_failure ) ;
+
+            END;
+
+            i_counter := i_counter + 1;
+        END LOOP;
+
+        COMMIT;
+
+        -- Identify distinct and return to main arr_sampleid
+        DBMS_OUTPUT.put_line (
+            'Array Failure Count  : ' || i_array_t_failure.COUNT);
+
+        IF i_array_t_failure.COUNT > 0
+        THEN
+            FOR i IN i_array_t_failure.FIRST .. i_array_t_failure.LAST
+            LOOP
+                l_tab1.EXTEND;
+                l_tab1 (i) := i_array_t_failure (i);
+            END LOOP;
+
+            l_tab1 := l_tab1 MULTISET INTERSECT DISTINCT l_tab1;
+
+            i_array_t_failure := NEW array_t ();
+
+            FOR i IN l_tab1.FIRST .. l_tab1.LAST
+            LOOP
+                i_array_t_failure.EXTEND;
+                i_array_t_failure (i) := l_tab1 (i);
+
+                --                DBMS_OUTPUT.put_line (
+                --                       'i_array_t_failure---('
+                --                    || i
+                --                    || '): '
+                --                    || i_array_t_failure (i));
+
+                OPEN o_ref_cur FOR SELECT * FROM TABLE (i_array_t_failure);
+            END LOOP;
+        END IF;
+    END bulk_replace_notice_rec;
+
+    PROCEDURE bulk_add_notice_rec (jsondata                   CLOB,
+                                   contract_nbrlistjson       CLOB,
+                                   userid                     VARCHAR2,
+                                   o_ref_cur              OUT ref_cur)
+    AS
+        i_counter           NUMBER;
+        i_flag_set          NUMBER;
+
+        i_array_t_failure   array_t;
+
+        TYPE t_tab IS TABLE OF NUMBER;
+
+        l_tab1              t_tab := t_tab ();
+
+        CURSOR cur IS
+            WITH
+                tmp
+                AS
+                    (SELECT jt.*, b.*
+                       FROM JSON_TABLE (
+                                jsondata,
+                                '$.jsonData.noticeRec[*]'
+                                COLUMNS (
+                                    partyoldid NUMBER PATH '$.partyOldId',
+                                    partyid NUMBER PATH '$.partyId',
+                                    partyoldtp
+                                        VARCHAR2 (20)
+                                        PATH '$.partyOldTp',
+                                    partytp VARCHAR2 (20) PATH '$.partyTp',
+                                    qccategory NUMBER PATH '$.qcCategory',
+                                    eventid NUMBER PATH '$.eventId')) jt,
+                            JSON_TABLE (contract_nbrlistjson,
+                                        '$[*]'
+                                        COLUMNS (contractid PATH '$')) b)
+            SELECT *
+              FROM tmp;
+    BEGIN
+        DBMS_APPLICATION_INFO.set_client_info (userid);
+        DBMS_APPLICATION_INFO.set_module (
+            'Bulk notice add - ' || TRUNC (SYSDATE),
+            '');
+
+        i_array_t_failure := NEW array_t ();
+
+
+        i_counter := 0;
+        i_flag_set := 0;
+
+        FOR rec IN cur
+        LOOP
+            DECLARE
+                i_contract_id        NUMBER;
+                i_party_oldid        NUMBER;
+                i_party_id           NUMBER;
+                i_party_oldtp        VARCHAR2 (20);
+                i_party_tp           VARCHAR2 (20);
+                i_qc_category_type   NUMBER;
+                i_eventid            NUMBER;
+            BEGIN
+                i_contract_id := NULL;
+                i_party_oldid := NULL;
+                i_party_id := NULL;
+                i_party_oldtp := NULL;
+                i_party_tp := NULL;
+                i_qc_category_type := NULL;
+                i_eventid := NULL;
+                DBMS_OUTPUT.put_line ('Contract ID: ' || rec.contractid);
+
+                BEGIN
+                    pg_notc.contact_insert_upd (
+                        i_contract_id        =>
+                            pg_contract.get_cur_contract (
+                                TO_NUMBER (rec.contractid)),
+                        i_party_oldid        => rec.partyoldid,
+                        i_party_id           => rec.partyid,
+                        i_party_oldtp        => rec.partyoldtp,
+                        i_party_tp           => rec.partytp,
+                        i_qc_category_type   => rec.qccategory,
+                        i_eventid            => rec.eventid);
+                EXCEPTION
+                    WHEN OTHERS
+                    THEN
+                        DBMS_OUTPUT.put_line (
+                            'Exception Contract ID: ' || rec.contractid);
+                        i_flag_set := i_flag_set + 1;
+                        i_array_t_failure.EXTEND;
+                        i_array_t_failure (i_flag_set) := rec.contractid;
+                --                    open o_ref_cur for
+                --                       select * from table( i_array_t_failure ) ;
+                END;
+            EXCEPTION
+                WHEN OTHERS
+                THEN
+                    i_flag_set := i_flag_set + 1;
+
+                    DBMS_OUTPUT.put_line (
+                        'Exception2 Contract ID: ' || rec.contractid);
+                    i_array_t_failure.EXTEND;
+                    DBMS_OUTPUT.put_line ('Exception3  ID: ' || i_flag_set);
+                    i_array_t_failure (i_flag_set) := rec.contractid;
+                    DBMS_OUTPUT.put_line ('Exception4  ID: ' || i_flag_set);
+            --                    open o_ref_cur for
+            --                        select * from table( i_array_t_failure ) ;
+
+            END;
+
+            i_counter := i_counter + 1;
+        END LOOP;
+
+        COMMIT;
+
+        -- Identify distinct and return to main arr_sampleid
+        IF i_array_t_failure.COUNT > 0
+        THEN
+            FOR i IN i_array_t_failure.FIRST .. i_array_t_failure.LAST
+            LOOP
+                l_tab1.EXTEND;
+                l_tab1 (i) := i_array_t_failure (i);
+            END LOOP;
+
+            l_tab1 := l_tab1 MULTISET INTERSECT DISTINCT l_tab1;
+
+            i_array_t_failure := NEW array_t ();
+
+            FOR i IN l_tab1.FIRST .. l_tab1.LAST
+            LOOP
+                i_array_t_failure.EXTEND;
+                i_array_t_failure (i) := l_tab1 (i);
+                DBMS_OUTPUT.put_line (
+                       'i_array_t_failure---('
+                    || i
+                    || '): '
+                    || i_array_t_failure (i));
+
+                --   ELSE
+                --   i_array_t_failure := NEW array_t ();
+
+                OPEN o_ref_cur FOR SELECT * FROM TABLE (i_array_t_failure);
+            END LOOP;
+        END IF;
+    END bulk_add_notice_rec;
+
+    PROCEDURE bulk_add_owner_1 (jsondata                   CLOB,
+                                contract_nbrlistjson       CLOB,
+                                userid                     VARCHAR2,
+                                o_ref_cur              OUT ref_cur)
+    AS
+        i_counter           NUMBER;
+        i_flag_set          NUMBER;
+
+        i_array_t_failure   array_t;
+
+        TYPE t_tab IS TABLE OF NUMBER;
+
+        l_tab1              t_tab := t_tab ();
+
+        CURSOR cur IS
+            WITH
+                tmp
+                AS
+                    (SELECT a.*
+                       FROM JSON_TABLE (
+                                jsondata,
+                                '$.jsonData.owner[*]'
+                                COLUMNS (
+                                    contractSaid NUMBER PATH '$.contractSaid',
+                                    partyid NUMBER PATH '$.partyId',
+                                    contractNbr NUMBER PATH '$.contractNbr'))
+                            a)
+            SELECT *
+              FROM tmp;
+    BEGIN
+        DBMS_APPLICATION_INFO.set_client_info (userid);
+        DBMS_APPLICATION_INFO.set_module (
+            'Bulk owner add - ' || TRUNC (SYSDATE),
+            '');
+        i_array_t_failure := NEW array_t ();
+
+
+        i_counter := 0;
+        i_flag_set := 0;
+
+        FOR rec IN cur
+        LOOP
+            DECLARE
+                -- Declarations
+                l_i_contract_id   NUMBER;
+                l_i_party_id      NUMBER;
+                l_i_user_id       VARCHAR2 (32767);
+            BEGIN
+                -- Initialization
+                l_i_contract_id := NULL;
+                l_i_party_id := NULL;
+                l_i_user_id := NULL;
+                DBMS_OUTPUT.put_line ('Contract ID: ' || rec.contractSaid);
+
+                -- Call
+                BEGIN
+                    NULL;
+                --                    netsites.pg_contract.contract_update_ownr (
+                --                        i_contract_id   => rec.contractSaid,
+                --                        i_party_id      => rec.partyid,
+                --                        i_user_id       => userid);
+                EXCEPTION
+                    WHEN OTHERS
+                    THEN
+                        i_flag_set := i_flag_set + 1;
+
+                        DBMS_OUTPUT.put_line (
+                            'Exception2 Contract ID: ' || rec.contractNbr);
+                        i_array_t_failure.EXTEND;
+                        DBMS_OUTPUT.put_line (
+                            'Exception3  ID: ' || i_flag_set);
+                        i_array_t_failure (i_flag_set) := rec.contractNbr;
+                        DBMS_OUTPUT.put_line (
+                            'Exception4  ID: ' || i_flag_set);
+
+                        OPEN o_ref_cur FOR
+                            SELECT * FROM TABLE (i_array_t_failure);
+                END;
+            EXCEPTION
+                WHEN OTHERS
+                THEN
+                    i_flag_set := i_flag_set + 1;
+
+                    DBMS_OUTPUT.put_line (
+                        'Exception2 Contract ID: ' || rec.contractSaid);
+                    i_array_t_failure.EXTEND;
+                    DBMS_OUTPUT.put_line ('Exception3  ID: ' || i_flag_set);
+                    i_array_t_failure (i_flag_set) := rec.contractSaid;
+                    DBMS_OUTPUT.put_line ('Exception4  ID: ' || i_flag_set);
+            --                    open o_ref_cur for
+            --                       select * from table( i_array_t_failure ) ;
+
+
+            END;
+
+            i_counter := i_counter + 1;
+        END LOOP;
+
+        COMMIT;
+    END bulk_add_owner_1;
+
+    PROCEDURE bulk_add_owner (jsondata                   CLOB,
+                              contract_nbrlistjson       CLOB,
+                              userid                     VARCHAR2,
+                              o_ref_cur              OUT ref_cur)
+    AS
+        i_counter              NUMBER;
+        i_flag_set             NUMBER;
+        l_i_contract_id        NUMBER;
+        l_i_party_id           NUMBER;
+        l_i_qc_category_type   NUMBER;
+        l_i_eventid            NUMBER;
+        l_i_user_id            VARCHAR2 (32767);
+        l_i_java_boolean       INTEGER;
+        o_trc_latest_event     trc_latest_event;
+        v_eventid              intranet.qc_event.eventid%TYPE;
+        v_auditid              intranet.qc_audit.auditid%TYPE;
+        c_obj_name    CONSTANT VARCHAR2 (200) := app_log.who_am_i;
+
+        i_array_t_failure      array_t;
+
+        TYPE t_tab IS TABLE OF NUMBER;
+
+        l_tab1                 t_tab := t_tab ();
+
+        CURSOR cur IS
+            WITH
+                tmp
+                AS
+                    (SELECT a.*
+                       FROM JSON_TABLE (
+                                jsondata,
+                                '$.jsonData.owner[*]'
+                                COLUMNS (
+                                    contractSaid NUMBER PATH '$.contractSaid',
+                                    partyid NUMBER PATH '$.partyId',
+                                    contractNbr NUMBER PATH '$.contractNbr',
+                                    qccategory NUMBER PATH '$.qcCategory',
+                                    eventid NUMBER PATH '$.eventId')) a)
+            SELECT *
+              FROM tmp;
+    BEGIN
+        DBMS_APPLICATION_INFO.set_client_info (userid);
+        DBMS_APPLICATION_INFO.set_module (
+            'Bulk owner add - ' || TRUNC (SYSDATE),
+            '');
+        i_array_t_failure := NEW array_t ();
+
+
+        i_counter := 0;
+        i_flag_set := 0;
+
+        FOR rec IN cur
+        LOOP
+            BEGIN
+                v_eventid := NULL;
+
+                --Get latest QC_Event
+                IF rec.eventid IS NULL
+                THEN
+                    BEGIN
+                        --                        NETSITES.PG_QC.GET_LATEST_EVENT (
+                        --                            I_CONTRACT_SAID      => rec.contractSaid,
+                        --                            I_QC_CATEGORY_TYPE   => rec.qccategory,
+                        --                            O_TRC_QC_EVENTS      => o_trc_latest_event);
+
+                        NETSITES.PG_QC.GET_LATEST_EVENT_FUZE (
+                            I_CONTRACT_SAID      => rec.contractSaid,
+                            I_QC_CATEGORY_TYPE   => rec.qccategory,
+                            I_USER_ID            => userid,
+                            O_TRC_QC_EVENTS      => o_trc_latest_event);
+
+                        --OPEN o_trc_latest_event;
+                        LOOP
+                            FETCH o_trc_latest_event
+                                INTO v_eventid, v_auditid;
+
+                            EXIT WHEN o_trc_latest_event%NOTFOUND;
+                        END LOOP;
+
+                        CLOSE o_trc_latest_event;
+                    EXCEPTION
+                        WHEN OTHERS
+                        THEN
+                            intranet.pkg_err.handle (SQLCODE,
+                                                     SQLERRM,
+                                                     TRUE,
+                                                     TRUE,
+                                                     c_obj_name,
+                                                     userid);
+                    END;
+                ELSE
+                    v_eventid := rec.eventid;
+                END IF;
+
+                DBMS_OUTPUT.put_line ('Contract Num: ' || rec.contractNbr);
+
+                -- Call
+                BEGIN
+                    netsites.pg_contract.contract_update_ownr (
+                        i_contract_id        => rec.contractSaid,
+                        i_party_id           => rec.partyid,
+                        i_qc_category_type   => rec.qccategory,
+                        i_eventid            => v_eventid,
+                        i_user_id            => userid,
+                        i_java_boolean       => 0); --please leave it as 0, don't change
+                EXCEPTION
+                    WHEN OTHERS
+                    THEN
+                        i_flag_set := i_flag_set + 1;
+
+                        DBMS_OUTPUT.put_line (
+                               'Exception2 Contract ID: '
+                            || rec.contractNbr
+                            || ', Party_ID: '
+                            || rec.partyid);
+                        i_array_t_failure.EXTEND;
+                        DBMS_OUTPUT.put_line (
+                            'Exception3  ID: ' || i_flag_set);
+                        i_array_t_failure (i_flag_set) := rec.contractNbr;
+                        DBMS_OUTPUT.put_line (
+                            'Exception4  ID: ' || i_flag_set);
+
+                        OPEN o_ref_cur FOR
+                            SELECT * FROM TABLE (i_array_t_failure);
+                END;
+            EXCEPTION
+                WHEN OTHERS
+                THEN
+                    i_flag_set := i_flag_set + 1;
+
+                    DBMS_OUTPUT.put_line (
+                           'Exception2 Contract ID: '
+                        || rec.contractSaid
+                        || ', Party_ID: '
+                        || rec.partyid);
+                    i_array_t_failure.EXTEND;
+                    DBMS_OUTPUT.put_line ('Exception3  ID: ' || i_flag_set);
+                    i_array_t_failure (i_flag_set) := rec.contractSaid;
+                    DBMS_OUTPUT.put_line ('Exception4  ID: ' || i_flag_set);
+            --                    open o_ref_cur for
+            --                       select * from table( i_array_t_failure ) ;
+
+
+            END;
+
+            i_counter := i_counter + 1;
+        END LOOP;
+
+        COMMIT;
+    END bulk_add_owner;
+
+    PROCEDURE bulk_update_termination (
+        jsondata               IN     CLOB,
+        contract_nbrlistjson          CLOB,
+        userid                        VARCHAR2,
+        o_ref_cur                 OUT ref_cur)
+    AS
+        i_counter             NUMBER;
+        i_flag_set            NUMBER;
+        v_contract_said       NUMBER;
+        i_qc_category_type    NUMBER;
+        i_eventid             NUMBER;
+        o_trc_latest_event    trc_latest_event;
+        v_eventid             intranet.qc_event.eventid%TYPE;
+        v_auditid             intranet.qc_audit.auditid%TYPE;
+        v_contract_nbr        VARCHAR2 (20);
+        v_amendment_nbr       intranet.contract.ammendment_nbr%TYPE;
+        v_session             BOOLEAN := FALSE;
+        c_obj_name   CONSTANT VARCHAR2 (200) := app_log.who_am_i;
+
+        i_array_t_failure     array_t;
+
+        TYPE t_tab IS TABLE OF NUMBER;
+
+        l_tab1                t_tab := t_tab ();
+
+        CURSOR cur IS
+            WITH
+                tmp
+                AS
+                    (SELECT a.*, c.*
+                       FROM JSON_TABLE (
+                                jsondata,
+                                '$'
+                                COLUMNS (
+                                    terminationdt
+                                        PATH '$.jsonData.termination[*].terminationDt',
+                                    terminationreason
+                                        PATH '$.jsonData.termination[*].terminationReason',
+                                    qccategory
+                                        PATH '$.jsonData.termination[*].qcCategory',
+                                    eventid
+                                        PATH '$.jsonData.termination[*].eventId'))
+                            a,
+                            JSON_TABLE (contract_nbrlistjson,
+                                        '$[*]'
+                                        COLUMNS (contractnbr PATH '$')) c)
+            SELECT *
+              FROM tmp;
+    BEGIN
+        DBMS_APPLICATION_INFO.set_client_info (userid);
+        DBMS_APPLICATION_INFO.set_module (
+            'Bulk Termination Dt upd - ' || TRUNC (SYSDATE),
+            '');
+
+        i_array_t_failure := NEW array_t ();
+
+        i_counter := 0;
+        i_flag_set := 0;
+
+        FOR rec IN cur
+        LOOP
+            BEGIN
+                v_eventid := NULL;
+
+                v_contract_said :=
+                    pg_contract.get_cur_contract (
+                        TO_NUMBER (rec.contractnbr));
+                intranet.pkg_contract.check_if_cur_contract (v_contract_said);
+
+                --Get latest QC_Event
+                IF rec.eventid IS NULL
+                THEN
+                    BEGIN
+                        --                        NETSITES.PG_QC.GET_LATEST_EVENT (
+                        --                            I_CONTRACT_SAID      => v_contract_said,
+                        --                            I_QC_CATEGORY_TYPE   => rec.qccategory,
+                        --                            O_TRC_QC_EVENTS      => o_trc_latest_event);
+
+                        NETSITES.PG_QC.GET_LATEST_EVENT_FUZE (
+                            I_CONTRACT_SAID      => v_contract_said,
+                            I_QC_CATEGORY_TYPE   => rec.qccategory,
+                            I_USER_ID            => userid,
+                            O_TRC_QC_EVENTS      => o_trc_latest_event);
+
+                        --OPEN o_trc_latest_event;
+                        LOOP
+                            FETCH o_trc_latest_event
+                                INTO v_eventid, v_auditid;
+
+                            EXIT WHEN o_trc_latest_event%NOTFOUND;
+                        END LOOP;
+
+                        CLOSE o_trc_latest_event;
+                    EXCEPTION
+                        WHEN OTHERS
+                        THEN
+                            intranet.pkg_err.handle (SQLCODE,
+                                                     SQLERRM,
+                                                     TRUE,
+                                                     TRUE,
+                                                     c_obj_name,
+                                                     userid);
+                    END;
+                ELSE
+                    v_eventid := rec.eventid;
+                END IF;
+
+                UPDATE intranet.contract
+                   SET termination_dt = rec.terminationdt,
+                       termination_code = rec.terminationreason,
+                       last_modified_on = SYSDATE,
+                       last_modified_by = userid
+                 WHERE contract_said = v_contract_said;
+
+                IF ((rec.qcCategory IS NULL) AND (rec.eventId IS NULL))
+                THEN
+                    RAISE intranet.pkg_msgs.exc_qc_audit_c;
+                ELSE
+                    SELECT contract_nbr, ammendment_nbr
+                      INTO v_contract_nbr, v_amendment_nbr
+                      FROM intranet.contract
+                     WHERE contract_said = v_contract_said;
+
+                    NETSITES.PG_QC.QC_EVENT_EVENTLOG_INS (
+                        v_contract_said,
+                        2,                            --I_EVENT_STATUS=Changed
+                        NULL,                        --I_EVENT_STATUS_COMMENT,
+                        NULL,                             --I_VERSION_COMMENT,
+                        100,                             --i_qc_event_category
+                        1,                               --I_QC_SCREEN_ID=Main
+                        1,                               --I_EVENT_LOG_STATUS,
+                           'Contract '
+                        || v_contract_nbr
+                        || '-'
+                        || v_amendment_nbr
+                        || ' is updated.',
+                        rec.qcCategory,
+                        v_eventid,
+                        userid,
+                        v_session);
+                END IF;
+            EXCEPTION
+                WHEN OTHERS
+                THEN
+                    i_flag_set := i_flag_set + 1;
+
+                    DBMS_OUTPUT.put_line (
+                        'Exception2 Contract ID: ' || rec.contractnbr);
+                    i_array_t_failure.EXTEND;
+                    DBMS_OUTPUT.put_line ('Exception3  ID: ' || i_flag_set);
+                    i_array_t_failure (i_flag_set) := rec.contractnbr;
+                    DBMS_OUTPUT.put_line ('Exception4  ID: ' || i_flag_set);
+
+                    OPEN o_ref_cur FOR
+                        SELECT * FROM TABLE (i_array_t_failure);
+            END;
+
+            i_counter := i_counter + 1;
+        END LOOP;
+
+        COMMIT;
+    END bulk_update_termination;
+
+    PROCEDURE bulk_update_comment (jsondata               IN     CLOB,
+                                   contract_nbrlistjson          CLOB,
+                                   userid                        VARCHAR2,
+                                   o_ref_cur                 OUT ref_cur)
+    AS
+        i_counter             NUMBER;
+        i_flag_set            NUMBER;
+        v_contract_said       NUMBER;
+        i_qc_category_type    NUMBER;
+        i_eventid             NUMBER;
+        o_trc_latest_event    trc_latest_event;
+        v_eventid             intranet.qc_event.eventid%TYPE;
+        v_auditid             intranet.qc_audit.auditid%TYPE;
+        v_contract_nbr        VARCHAR2 (20);
+        v_amendment_nbr       intranet.contract.ammendment_nbr%TYPE;
+        v_session             BOOLEAN := FALSE;
+        c_obj_name   CONSTANT VARCHAR2 (200) := app_log.who_am_i;
+
+        i_array_t_failure     array_t;
+
+        TYPE t_tab IS TABLE OF NUMBER;
+
+        l_tab1                t_tab := t_tab ();
+
+        CURSOR cur IS
+            WITH
+                tmp
+                AS
+                    (SELECT a.*, c.*
+                       FROM JSON_TABLE (
+                                jsondata,
+                                '$'
+                                COLUMNS (
+                                    comments
+                                        PATH '$.jsonData.comments[*].comment',
+                                    qccategory
+                                        PATH '$.jsonData.comments[*].qcCategory',
+                                    eventid
+                                        PATH '$.jsonData.comments[*].eventId'))
+                            a,
+                            JSON_TABLE (contract_nbrlistjson,
+                                        '$[*]'
+                                        COLUMNS (contractnbr PATH '$')) c)
+            SELECT *
+              FROM tmp;
+    BEGIN
+        DBMS_APPLICATION_INFO.set_client_info (userid);
+        DBMS_APPLICATION_INFO.set_module (
+            'Bulk comment upd - ' || TRUNC (SYSDATE),
+            '');
+        i_array_t_failure := NEW array_t ();
+        i_counter := 0;
+        i_flag_set := 0;
+
+        FOR rec IN cur
+        LOOP
+            BEGIN
+                v_eventid := NULL;
+
+                v_contract_said :=
+                    pg_contract.get_cur_contract (
+                        TO_NUMBER (rec.contractnbr));
+
+                intranet.pkg_contract.check_if_cur_contract (v_contract_said);
+
+                --Get latest QC_Event
+                IF rec.eventid IS NULL
+                THEN
+                    BEGIN
+                        --                        NETSITES.PG_QC.GET_LATEST_EVENT (
+                        --                            I_CONTRACT_SAID      => v_contract_said,
+                        --                            I_QC_CATEGORY_TYPE   => rec.qccategory,
+                        --                            O_TRC_QC_EVENTS      => o_trc_latest_event);
+
+                        NETSITES.PG_QC.GET_LATEST_EVENT_FUZE (
+                            I_CONTRACT_SAID      => v_contract_said,
+                            I_QC_CATEGORY_TYPE   => rec.qccategory,
+                            I_USER_ID            => userid,
+                            O_TRC_QC_EVENTS      => o_trc_latest_event);
+
+                        --OPEN o_trc_latest_event;
+                        LOOP
+                            FETCH o_trc_latest_event
+                                INTO v_eventid, v_auditid;
+
+                            EXIT WHEN o_trc_latest_event%NOTFOUND;
+                        END LOOP;
+
+                        CLOSE o_trc_latest_event;
+                    EXCEPTION
+                        WHEN OTHERS
+                        THEN
+                            intranet.pkg_err.handle (SQLCODE,
+                                                     SQLERRM,
+                                                     TRUE,
+                                                     TRUE,
+                                                     c_obj_name,
+                                                     userid);
+                    END;
+                ELSE
+                    v_eventid := rec.eventid;
+                END IF;
+
+                UPDATE intranet.contract
+                   SET contract_desc = rec.comments,
+                       last_modified_on = SYSDATE,
+                       last_modified_by = userid
+                 WHERE contract_said = v_contract_said;
+
+                IF ((rec.qcCategory IS NULL) AND (rec.eventId IS NULL))
+                THEN
+                    RAISE intranet.pkg_msgs.exc_qc_audit_c;
+                ELSE
+                    SELECT contract_nbr, ammendment_nbr
+                      INTO v_contract_nbr, v_amendment_nbr
+                      FROM intranet.contract
+                     WHERE contract_said = v_contract_said;
+
+                    NETSITES.PG_QC.QC_EVENT_EVENTLOG_INS (
+                        v_contract_said,
+                        2,                            --I_EVENT_STATUS=Changed
+                        NULL,                        --I_EVENT_STATUS_COMMENT,
+                        NULL,                             --I_VERSION_COMMENT,
+                        100,                             --i_qc_event_category
+                        1,                               --I_QC_SCREEN_ID=Main
+                        1,                               --I_EVENT_LOG_STATUS,
+                           'Contract '
+                        || v_contract_nbr
+                        || '-'
+                        || v_amendment_nbr
+                        || ' is updated.',
+                        rec.qcCategory,
+                        v_eventid,
+                        userid,
+                        v_session);
+                END IF;
+            EXCEPTION
+                WHEN OTHERS
+                THEN
+                    i_flag_set := i_flag_set + 1;
+
+                    DBMS_OUTPUT.put_line (
+                        'Exception2 Contract ID: ' || rec.contractnbr);
+                    i_array_t_failure.EXTEND;
+                    DBMS_OUTPUT.put_line ('Exception3  ID: ' || i_flag_set);
+                    i_array_t_failure (i_flag_set) := rec.contractnbr;
+                    DBMS_OUTPUT.put_line ('Exception4  ID: ' || i_flag_set);
+
+                    OPEN o_ref_cur FOR
+                        SELECT * FROM TABLE (i_array_t_failure);
+            END;
+
+            i_counter := i_counter + 1;
+        END LOOP;
+
+        COMMIT;
+    END bulk_update_comment;
+
+    PROCEDURE bulk_update_master (jsondata               IN     CLOB,
+                                  contract_nbrlistjson          CLOB,
+                                  userid                        VARCHAR2,
+                                  o_ref_cur                 OUT ref_cur)
+    AS
+        i_counter             NUMBER;
+        i_flag_set            NUMBER;
+        v_contract_said       NUMBER;
+        i_qc_category_type    NUMBER;
+        i_eventid             NUMBER;
+        o_trc_latest_event    trc_latest_event;
+        v_eventid             intranet.qc_event.eventid%TYPE;
+        v_auditid             intranet.qc_audit.auditid%TYPE;
+        v_contract_nbr        VARCHAR2 (20);
+        v_amendment_nbr       intranet.contract.ammendment_nbr%TYPE;
+        v_session             BOOLEAN := FALSE;
+        c_obj_name   CONSTANT VARCHAR2 (200) := app_log.who_am_i;
+        i_array_t_failure     array_t;
+
+        TYPE t_tab IS TABLE OF NUMBER;
+
+        l_tab1                t_tab := t_tab ();
+
+        CURSOR cur IS
+            WITH
+                tmp
+                AS
+                    (SELECT a.*, c.*
+                       FROM JSON_TABLE (
+                                jsondata,
+                                '$'
+                                COLUMNS (
+                                    masterid
+                                        PATH '$.jsonData.master[*].masterId',
+                                    qccategory
+                                        PATH '$.jsonData.master[*].qcCategory',
+                                    eventid
+                                        PATH '$.jsonData.master[*].eventId'))
+                            a,
+                            JSON_TABLE (contract_nbrlistjson,
+                                        '$[*]'
+                                        COLUMNS (contractnbr PATH '$')) c)
+            SELECT *
+              FROM tmp;
+    BEGIN
+        DBMS_APPLICATION_INFO.set_client_info (userid);
+        DBMS_APPLICATION_INFO.set_module (
+            'Bulk master upd - ' || TRUNC (SYSDATE),
+            '');
+        i_array_t_failure := NEW array_t ();
+        i_counter := 0;
+        i_flag_set := 0;
+
+        FOR rec IN cur
+        LOOP
+            BEGIN
+                v_contract_said :=
+                    pg_contract.get_cur_contract (
+                        TO_NUMBER (rec.contractnbr));
+
+                intranet.pkg_contract.check_if_cur_contract (v_contract_said);
+                DBMS_OUTPUT.put_line (
+                       'Get Unlocked Contract ID: || QC Cate: '
+                    || v_contract_said
+                    || '----'
+                    || rec.qccategory);
+
+                --Get latest QC_Event
+                IF rec.eventid IS NULL
+                THEN
+                    BEGIN
+                        --                        NETSITES.PG_QC.GET_LATEST_EVENT (
+                        --                            I_CONTRACT_SAID      => v_contract_said,
+                        --                            I_QC_CATEGORY_TYPE   => rec.qccategory,
+                        --                            O_TRC_QC_EVENTS      => o_trc_latest_event);
+
+                        NETSITES.PG_QC.GET_LATEST_EVENT_FUZE (
+                            I_CONTRACT_SAID      => v_contract_said,
+                            I_QC_CATEGORY_TYPE   => rec.qccategory,
+                            I_USER_ID            => userid,
+                            O_TRC_QC_EVENTS      => o_trc_latest_event);
+
+                        --OPEN o_trc_latest_event;
+                        LOOP
+                            FETCH o_trc_latest_event
+                                INTO v_eventid, v_auditid;
+
+                            EXIT WHEN o_trc_latest_event%NOTFOUND;
+                        END LOOP;
+
+                        CLOSE o_trc_latest_event;
+                    EXCEPTION
+                        WHEN OTHERS
+                        THEN
+                            intranet.pkg_err.handle (SQLCODE,
+                                                     SQLERRM,
+                                                     TRUE,
+                                                     TRUE,
+                                                     c_obj_name,
+                                                     userid);
+                    END;
+                ELSE
+                    v_eventid := rec.eventid;
+                END IF;
+
+                DBMS_OUTPUT.put_line ('Get Latest Event ID: ' || v_eventid);
+
+                UPDATE intranet.contract
+                   SET master_contract_id = rec.masterid,
+                       last_modified_on = SYSDATE,
+                       last_modified_by = userid
+                 WHERE contract_said = v_contract_said;
+
+                DBMS_OUTPUT.put_line (
+                    'Updated Contract ID: ' || rec.contractnbr);
+
+                IF ((rec.qcCategory IS NULL) AND (rec.eventId IS NULL))
+                THEN
+                    RAISE intranet.pkg_msgs.exc_qc_audit_c;
+                ELSE
+                    DBMS_OUTPUT.put_line (
+                        'Creating QC Contract ID: ' || rec.contractnbr);
+
+                    SELECT contract_nbr, ammendment_nbr
+                      INTO v_contract_nbr, v_amendment_nbr
+                      FROM intranet.contract
+                     WHERE contract_said = v_contract_said;
+
+                    NETSITES.PG_QC.QC_EVENT_EVENTLOG_INS (
+                        v_contract_said,
+                        2,                            --I_EVENT_STATUS=Changed
+                        NULL,                        --I_EVENT_STATUS_COMMENT,
+                        NULL,                             --I_VERSION_COMMENT,
+                        100,                             --i_qc_event_category
+                        1,                               --I_QC_SCREEN_ID=Main
+                        1,                               --I_EVENT_LOG_STATUS,
+                           'Contract '
+                        || v_contract_nbr
+                        || '-'
+                        || v_amendment_nbr
+                        || ' is updated.',
+                        rec.qcCategory,
+                        v_eventid,
+                        userid,
+                        v_session);
+                END IF;
+            EXCEPTION
+                WHEN OTHERS
+                THEN
+                    i_flag_set := i_flag_set + 1;
+
+                    DBMS_OUTPUT.put_line (
+                        'Exception2 Contract ID: ' || rec.contractnbr);
+                    i_array_t_failure.EXTEND;
+                    DBMS_OUTPUT.put_line ('Exception3  ID: ' || i_flag_set);
+                    i_array_t_failure (i_flag_set) := rec.contractnbr;
+                    DBMS_OUTPUT.put_line ('Exception4  ID: ' || i_flag_set);
+
+                    OPEN o_ref_cur FOR
+                        SELECT * FROM TABLE (i_array_t_failure);
+            END;
+
+            i_counter := i_counter + 1;
+        END LOOP;
+
+        COMMIT;
+    END bulk_update_master;
+
+    PROCEDURE bulk_update_facility (jsondata               IN     CLOB,
+                                    contract_nbrlistjson          CLOB,
+                                    userid                        VARCHAR2,
+                                    o_ref_cur                 OUT ref_cur)
+    AS
+        i_counter             NUMBER;
+        i_flag_set            NUMBER;
+        v_contract_said       NUMBER;
+        i_qc_category_type    NUMBER;
+        i_eventid             NUMBER;
+        o_trc_latest_event    trc_latest_event;
+        v_eventid             intranet.qc_event.eventid%TYPE;
+        v_auditid             intranet.qc_audit.auditid%TYPE;
+        v_contract_nbr        VARCHAR2 (20);
+        v_amendment_nbr       intranet.contract.ammendment_nbr%TYPE;
+        v_session             BOOLEAN := FALSE;
+        c_obj_name   CONSTANT VARCHAR2 (200) := app_log.who_am_i;
+
+        i_array_t_failure     array_t;
+
+        TYPE t_tab IS TABLE OF NUMBER;
+
+        l_tab1                t_tab := t_tab ();
+
+        CURSOR cur IS
+            WITH
+                tmp
+                AS
+                    (SELECT a.*, c.*
+                       FROM JSON_TABLE (
+                                jsondata,
+                                '$'
+                                COLUMNS (
+                                    facilitytype
+                                        PATH '$.jsonData.facility[*].facilityType',
+                                    facilitytypedetail
+                                        PATH '$.jsonData.facility[*].facilityTypeDetail',
+                                    qccategory
+                                        PATH '$.jsonData.facility[*].qcCategory',
+                                    eventid
+                                        PATH '$.jsonData.facility[*].eventId'))
+                            a,
+                            JSON_TABLE (contract_nbrlistjson,
+                                        '$[*]'
+                                        COLUMNS (contractnbr PATH '$')) c)
+            SELECT *
+              FROM tmp;
+    BEGIN
+        DBMS_APPLICATION_INFO.set_client_info (userid);
+        DBMS_APPLICATION_INFO.set_module (
+            'Bulk facility upd - ' || TRUNC (SYSDATE),
+            '');
+        i_array_t_failure := NEW array_t ();
+        i_counter := 0;
+        i_flag_set := 0;
+
+        FOR rec IN cur
+        LOOP
+            BEGIN
+                v_eventid := NULL;
+
+                v_contract_said :=
+                    pg_contract.get_cur_contract (
+                        TO_NUMBER (rec.contractnbr));
+
+                intranet.pkg_contract.check_if_cur_contract (v_contract_said);
+
+                --Get latest QC_Event
+                IF rec.eventid IS NULL
+                THEN
+                    BEGIN
+                        --                        NETSITES.PG_QC.GET_LATEST_EVENT (
+                        --                            I_CONTRACT_SAID      => v_contract_said,
+                        --                            I_QC_CATEGORY_TYPE   => rec.qccategory,
+                        --                            O_TRC_QC_EVENTS      => o_trc_latest_event);
+
+                        NETSITES.PG_QC.GET_LATEST_EVENT_FUZE (
+                            I_CONTRACT_SAID      => v_contract_said,
+                            I_QC_CATEGORY_TYPE   => rec.qccategory,
+                            I_USER_ID            => userid,
+                            O_TRC_QC_EVENTS      => o_trc_latest_event);
+
+                        --OPEN o_trc_latest_event;
+                        LOOP
+                            FETCH o_trc_latest_event
+                                INTO v_eventid, v_auditid;
+
+                            EXIT WHEN o_trc_latest_event%NOTFOUND;
+                        END LOOP;
+
+                        CLOSE o_trc_latest_event;
+                    EXCEPTION
+                        WHEN OTHERS
+                        THEN
+                            intranet.pkg_err.handle (SQLCODE,
+                                                     SQLERRM,
+                                                     TRUE,
+                                                     TRUE,
+                                                     c_obj_name,
+                                                     userid);
+                    END;
+                ELSE
+                    v_eventid := rec.eventid;
+                END IF;
+
+                UPDATE intranet.contract
+                   SET facility_type_code = rec.facilitytype,
+                       facility_type_detail = rec.facilitytypedetail,
+                       last_modified_on = SYSDATE,
+                       last_modified_by = userid
+                 WHERE contract_said = v_contract_said;
+
+                IF ((rec.qcCategory IS NULL) AND (rec.eventId IS NULL))
+                THEN
+                    RAISE intranet.pkg_msgs.exc_qc_audit_c;
+                ELSE
+                    SELECT contract_nbr, ammendment_nbr
+                      INTO v_contract_nbr, v_amendment_nbr
+                      FROM intranet.contract
+                     WHERE contract_said = v_contract_said;
+
+                    NETSITES.PG_QC.QC_EVENT_EVENTLOG_INS (
+                        v_contract_said,
+                        2,                            --I_EVENT_STATUS=Changed
+                        NULL,                        --I_EVENT_STATUS_COMMENT,
+                        NULL,                             --I_VERSION_COMMENT,
+                        100,                             --i_qc_event_category
+                        1,                               --I_QC_SCREEN_ID=Main
+                        1,                               --I_EVENT_LOG_STATUS,
+                           'Contract '
+                        || v_contract_nbr
+                        || '-'
+                        || v_amendment_nbr
+                        || ' is updated.',
+                        rec.qcCategory,
+                        v_eventid,
+                        userid,
+                        v_session);
+                END IF;
+            EXCEPTION
+                WHEN OTHERS
+                THEN
+                    i_flag_set := i_flag_set + 1;
+
+                    DBMS_OUTPUT.put_line (
+                        'Exception2 Contract ID: ' || rec.contractnbr);
+                    i_array_t_failure.EXTEND;
+                    DBMS_OUTPUT.put_line ('Exception3  ID: ' || i_flag_set);
+                    i_array_t_failure (i_flag_set) := rec.contractnbr;
+                    DBMS_OUTPUT.put_line ('Exception4  ID: ' || i_flag_set);
+
+                    OPEN o_ref_cur FOR
+                        SELECT * FROM TABLE (i_array_t_failure);
+            END;
+
+            i_counter := i_counter + 1;
+        END LOOP;
+
+        COMMIT;
+    END bulk_update_facility;
+
+    PROCEDURE bulk_update_custom_attr (jsondata               IN CLOB,
+                                       contract_nbrlistjson      CLOB,
+                                       userid                    VARCHAR2)
+    AS
+        CURSOR cur IS
+            WITH
+                tmp
+                AS
+                    (SELECT a.*, c.*
+                       FROM JSON_TABLE (
+                                jsondata,
+                                '$'
+                                COLUMNS (
+                                    tablename
+                                        PATH '$.jsonData.customAttr[*].tableName',
+                                    keyname
+                                        PATH '$.jsonData.customAttr[*].keyName',
+                                    keyvalue
+                                        PATH '$.jsonData.customAttr[*].keyValue',
+                                    definitionssaid
+                                        PATH '$.jsonData.customAttr[*].definitionsSaid',
+                                    definitionsvalue
+                                        PATH '$.jsonData.customAttr[*].definitionsValue'))
+                            a,
+                            JSON_TABLE (contract_nbrlistjson,
+                                        '$[*]'
+                                        COLUMNS (contractnbr PATH '$')) c)
+            SELECT *
+              FROM tmp;
+    BEGIN
+        FOR rec IN cur
+        LOOP
+            DECLARE
+                v_return   NUMBER;
+            BEGIN
+                v_return :=
+                    pg_contract.get_cur_contract (
+                        TO_NUMBER (rec.contractnbr));
+
+                UPDATE intranet.custom_attributes
+                   SET table_name = rec.tablename,
+                       key_name = rec.keyname,
+                       key_value = rec.keyvalue,
+                       definitions_said = rec.definitionssaid,
+                       definitions_value = rec.definitionsvalue,
+                       last_modified_on = SYSTIMESTAMP,
+                       last_modified_by = userid
+                 WHERE key_name = 'contract_said' AND key_value = v_return;
+            END;
+        END LOOP;
+    END bulk_update_custom_attr;
+
+    PROCEDURE bulk_update_site_control (
+        jsondata               IN     CLOB,
+        contract_nbrlistjson          CLOB,
+        userid                        VARCHAR2,
+        o_ref_cur                 OUT ref_cur)
+    AS
+        i_counter             NUMBER;
+        i_flag_set            NUMBER;
+        v_contract_said       NUMBER;
+        i_qc_category_type    NUMBER;
+        i_eventid             NUMBER;
+        o_trc_latest_event    trc_latest_event;
+        v_eventid             intranet.qc_event.eventid%TYPE;
+        v_auditid             intranet.qc_audit.auditid%TYPE;
+        v_contract_nbr        VARCHAR2 (20);
+        v_amendment_nbr       intranet.contract.ammendment_nbr%TYPE;
+        v_session             BOOLEAN := FALSE;
+        c_obj_name   CONSTANT VARCHAR2 (200) := app_log.who_am_i;
+
+        i_array_t_failure     array_t;
+
+        TYPE t_tab IS TABLE OF NUMBER;
+
+        l_tab1                t_tab := t_tab ();
+
+        CURSOR cur IS
+            WITH
+                tmp
+                AS
+                    (SELECT a.*, c.*
+                       FROM JSON_TABLE (
+                                jsondata,
+                                '$'
+                                COLUMNS (
+                                    sitecontrolcode
+                                        PATH '$.jsonData.siteControl[*].siteControlCode',
+                                    qccategory
+                                        PATH '$.jsonData.siteControl[*].qcCategory',
+                                    eventid
+                                        PATH '$.jsonData.siteControl[*].eventId'))
+                            a,
+                            JSON_TABLE (contract_nbrlistjson,
+                                        '$[*]'
+                                        COLUMNS (contractnbr PATH '$')) c)
+            SELECT *
+              FROM tmp;
+    BEGIN
+        DBMS_APPLICATION_INFO.set_client_info (userid);
+        DBMS_APPLICATION_INFO.set_module (
+            'Bulk Site_Control upd - ' || TRUNC (SYSDATE),
+            '');
+        i_array_t_failure := NEW array_t ();
+        i_counter := 0;
+        i_flag_set := 0;
+
+        FOR rec IN cur
+        LOOP
+            BEGIN
+                v_eventid := NULL;
+
+                v_contract_said :=
+                    pg_contract.get_cur_contract (
+                        TO_NUMBER (rec.contractnbr));
+                intranet.pkg_contract.check_if_cur_contract (v_contract_said);
+
+                --Get latest QC_Event
+                IF rec.eventid IS NULL
+                THEN
+                    BEGIN
+                        --                        NETSITES.PG_QC.GET_LATEST_EVENT (
+                        --                            I_CONTRACT_SAID      => v_contract_said,
+                        --                            I_QC_CATEGORY_TYPE   => rec.qccategory,
+                        --                            O_TRC_QC_EVENTS      => o_trc_latest_event);
+
+                        NETSITES.PG_QC.GET_LATEST_EVENT_FUZE (
+                            I_CONTRACT_SAID      => v_contract_said,
+                            I_QC_CATEGORY_TYPE   => rec.qccategory,
+                            I_USER_ID            => userid,
+                            O_TRC_QC_EVENTS      => o_trc_latest_event);
+
+                        --OPEN o_trc_latest_event;
+                        LOOP
+                            FETCH o_trc_latest_event
+                                INTO v_eventid, v_auditid;
+
+                            EXIT WHEN o_trc_latest_event%NOTFOUND;
+                        END LOOP;
+
+                        CLOSE o_trc_latest_event;
+                    EXCEPTION
+                        WHEN OTHERS
+                        THEN
+                            intranet.pkg_err.handle (SQLCODE,
+                                                     SQLERRM,
+                                                     TRUE,
+                                                     TRUE,
+                                                     c_obj_name,
+                                                     userid);
+                    END;
+                ELSE
+                    v_eventid := rec.eventid;
+                END IF;
+
+                UPDATE intranet.contract
+                   SET site_control_code = rec.sitecontrolcode,
+                       last_modified_on = SYSDATE,
+                       last_modified_by = userid
+                 WHERE contract_said = v_contract_said;
+
+                IF ((rec.qcCategory IS NULL) AND (rec.eventId IS NULL))
+                THEN
+                    RAISE intranet.pkg_msgs.exc_qc_audit_c;
+                ELSE
+                    SELECT contract_nbr, ammendment_nbr
+                      INTO v_contract_nbr, v_amendment_nbr
+                      FROM intranet.contract
+                     WHERE contract_said = v_contract_said;
+
+                    NETSITES.PG_QC.QC_EVENT_EVENTLOG_INS (
+                        v_contract_said,
+                        2,                            --I_EVENT_STATUS=Changed
+                        NULL,                        --I_EVENT_STATUS_COMMENT,
+                        NULL,                             --I_VERSION_COMMENT,
+                        100,                             --i_qc_event_category
+                        1,                               --I_QC_SCREEN_ID=Main
+                        1,                               --I_EVENT_LOG_STATUS,
+                           'Contract '
+                        || v_contract_nbr
+                        || '-'
+                        || v_amendment_nbr
+                        || ' is updated.',
+                        rec.qcCategory,
+                        v_eventid,
+                        userid,
+                        v_session);
+                END IF;
+            EXCEPTION
+                WHEN OTHERS
+                THEN
+                    i_flag_set := i_flag_set + 1;
+
+                    DBMS_OUTPUT.put_line (
+                        'Exception2 Contract ID: ' || rec.contractnbr);
+                    i_array_t_failure.EXTEND;
+                    DBMS_OUTPUT.put_line ('Exception3  ID: ' || i_flag_set);
+                    i_array_t_failure (i_flag_set) := rec.contractnbr;
+                    DBMS_OUTPUT.put_line ('Exception4  ID: ' || i_flag_set);
+
+                    OPEN o_ref_cur FOR
+                        SELECT * FROM TABLE (i_array_t_failure);
+            END;
+
+            i_counter := i_counter + 1;
+        END LOOP;
+
+        COMMIT;
+    END bulk_update_site_control;
+
+    PROCEDURE bulk_del_notice_rec (jsondata                   CLOB,
+                                   contract_nbrlistjson       CLOB,
+                                   userid                     VARCHAR2,
+                                   o_ref_cur              OUT ref_cur)
+    AS
+        i_counter             NUMBER;
+        i_flag_set            NUMBER;
+        i_contract_id         NUMBER;
+        i_party_id            NUMBER;
+        i_qc_category_type    NUMBER;
+        i_eventid             NUMBER;
+        o_trc_latest_event    trc_latest_event;
+        v_eventid             intranet.qc_event.eventid%TYPE;
+        v_auditid             intranet.qc_audit.auditid%TYPE;
+        i_array_t_failure     array_t;
+        c_obj_name   CONSTANT VARCHAR2 (200) := app_log.who_am_i;
+
+        TYPE t_tab IS TABLE OF NUMBER;
+
+        l_tab1                t_tab := t_tab ();
+
+        CURSOR cur IS
+  /**          WITH
+                tmp
+                AS
+                    (SELECT a.*, b.*
+                       FROM JSON_TABLE (
+                                jsondata,
+                                '$.jsonData.noticeRec[*]'
+                                COLUMNS (
+                                    partyid NUMBER PATH '$.partyId',
+                                    qccategory NUMBER PATH '$.qcCategory',
+                                    eventid NUMBER PATH '$.eventId')) a,
+                            JSON_TABLE (contract_nbrlistjson,
+                                        '$[*]'
+                                        COLUMNS (contractid PATH '$')) b)
+            SELECT *
+              FROM tmp;**/            
+          WITH
+                tmp
+                AS
+                    (SELECT a.*
+                       FROM JSON_TABLE (
+                                jsondata,
+                                '$.jsonData.noticeRec[*]'
+                                COLUMNS (
+                                  id FOR ORDINALITY,
+                                    partyid NUMBER PATH '$.partyId',
+                                    qccategory NUMBER PATH '$.qcCategory',
+                                    eventid NUMBER PATH '$.eventId',
+                                    NESTED PATH '$.contarctNum[*]'
+                                        COLUMNS (
+                                            contractNum_ID FOR ORDINALITY,
+                                            contractid PATH '$')   
+                                    )) a)
+            SELECT distinct partyid, qccategory , eventid ,contractid
+              FROM tmp;   
+              
+    BEGIN
+        DBMS_APPLICATION_INFO.set_client_info (userid);
+        DBMS_APPLICATION_INFO.set_module (
+            'Bulk notice delete - ' || TRUNC (SYSDATE),
+            '');
+
+        i_array_t_failure := NEW array_t ();
+
+        i_counter := 0;
+        i_flag_set := 0;
+
+        FOR rec IN cur
+        LOOP
+            BEGIN
+                v_eventid := NULL;
+
+                --Get latest QC_Event
+                IF rec.eventid IS NULL
+                THEN
+                    BEGIN
+                        --                        NETSITES.PG_QC.GET_LATEST_EVENT (
+                        --                            I_CONTRACT_SAID      => rec.contractid,
+                        --                            I_QC_CATEGORY_TYPE   => rec.qccategory,
+                        --                            O_TRC_QC_EVENTS      => o_trc_latest_event);
+
+                        NETSITES.PG_QC.GET_LATEST_EVENT_FUZE (
+                            I_CONTRACT_SAID      =>   pg_contract.get_cur_contract (
+                                TO_NUMBER (rec.contractid)),
+                            I_QC_CATEGORY_TYPE   => rec.qccategory,
+                            I_USER_ID            => userid,
+                            O_TRC_QC_EVENTS      => o_trc_latest_event);
+
+                        --OPEN o_trc_latest_event;
+                        LOOP
+                            FETCH o_trc_latest_event
+                                INTO v_eventid, v_auditid;
+
+                            EXIT WHEN o_trc_latest_event%NOTFOUND;
+                        END LOOP;
+
+                        CLOSE o_trc_latest_event;
+                    EXCEPTION
+                        WHEN OTHERS
+                        THEN
+                            intranet.pkg_err.handle (SQLCODE,
+                                                     SQLERRM,
+                                                     TRUE,
+                                                     TRUE,
+                                                     c_obj_name,
+                                                     userid);
+                    END;
+                ELSE
+                    v_eventid := rec.eventid;
+                END IF;
+
+                BEGIN
+                    pg_notc.contact_delete (
+                        i_contract_id        =>
+                            pg_contract.get_cur_contract (
+                                TO_NUMBER (rec.contractid)),
+                        i_party_id           => rec.partyid,
+                        i_qc_category_type   => rec.qccategory,
+                        i_eventid            => v_eventid);
+                EXCEPTION
+                    WHEN OTHERS
+                    THEN
+                        DBMS_OUTPUT.put_line (
+                            'Exception Contract ID: ' || rec.contractid);
+                        i_flag_set := i_flag_set + 1;
+                        i_array_t_failure.EXTEND;
+                        i_array_t_failure (i_flag_set) := rec.contractid;
+
+                        OPEN o_ref_cur FOR
+                            SELECT * FROM TABLE (i_array_t_failure);
+                END;
+            EXCEPTION
+                WHEN OTHERS
+                THEN
+                    i_flag_set := i_flag_set + 1;
+
+                    DBMS_OUTPUT.put_line (
+                        'Exception2 Contract ID: ' || rec.contractid);
+                    i_array_t_failure.EXTEND;
+                    DBMS_OUTPUT.put_line ('Exception3  ID: ' || i_flag_set);
+                    i_array_t_failure (i_flag_set) := rec.contractid;
+                    DBMS_OUTPUT.put_line ('Exception4  ID: ' || i_flag_set);
+            --  OPEN o_ref_cur FOR
+            --     SELECT * FROM TABLE (i_array_t_failure);
+            END;
+
+            i_counter := i_counter + 1;
+        END LOOP;
+
+        COMMIT;
+
+        -- Identify distinct and return to main arr_sampleid
+        IF i_array_t_failure.COUNT > 0
+        THEN
+            FOR i IN i_array_t_failure.FIRST .. i_array_t_failure.LAST
+            LOOP
+                l_tab1.EXTEND;
+                l_tab1 (i) := i_array_t_failure (i);
+            END LOOP;
+
+            l_tab1 := l_tab1 MULTISET INTERSECT DISTINCT l_tab1;
+
+            i_array_t_failure := NEW array_t ();
+
+            FOR i IN l_tab1.FIRST .. l_tab1.LAST
+            LOOP
+                i_array_t_failure.EXTEND;
+                i_array_t_failure (i) := l_tab1 (i);
+                DBMS_OUTPUT.put_line (
+                       'i_array_t_failure---('
+                    || i
+                    || '): '
+                    || i_array_t_failure (i));
+            END LOOP;
+
+            OPEN o_ref_cur FOR SELECT * FROM TABLE (i_array_t_failure);
+        END IF;
+    END bulk_del_notice_rec;
+
+    PROCEDURE bulk_get_notice_rec (contract_nbrlistjson   IN     CLOB,
+                                   o_ref_cur                 OUT ref_cur)
+    AS
+    BEGIN
+        OPEN o_ref_cur FOR
+              SELECT DISTINCT
+                     cp.party_said,
+                     cp.party_contact_mechsm_role_cd,
+                     a.contact_mechsm_id,
+                     a.line1_addr,
+                     a.line2_addr,
+                     a.line3_addr,
+                     a.city_name,
+                     a.state_name,
+                     a.zip_code,
+                     LTRIM (RTRIM (p.ename))
+                         AS "ename",
+                     LISTAGG (contract_nbr, ',')
+                         WITHIN GROUP (ORDER BY contract_nbr)
+                         AS contractnbr,
+                     COUNT (*)
+                         AS COUNT,
+                     cp.vendor_location,
+                     p.vendor_nbr
+                FROM intranet.contract_party      cp
+                     INNER JOIN intranet.contract cn
+                         ON cp.contract_said = cn.contract_said,
+                     netsites.vw_party_summary    p,
+                     netsites.party_contact_mechsm pcm,
+                     netsites.vw_contact_address  a,
+                     (SELECT b.contractid
+                        FROM JSON_TABLE (contract_nbrlistjson,
+                                         '$[*]'
+                                         COLUMNS (contractid PATH '$')) b) aa
+               WHERE     cp.contract_said =
+                         pg_contract.get_cur_contract (
+                             TO_NUMBER (aa.contractid))
+                     AND cp.party_contact_mechsm_role_cd = 'NOTC'
+                     AND cp.party_said = p.party_id
+                     AND p.party_id = pcm.party_id
+                     AND pcm.contact_mechsm_id = a.contact_mechsm_id
+                     AND a.active_ind = netsites.pg_global.c_boolean_true
+                     AND a.id = 202
+            GROUP BY cp.party_said,
+                     cp.party_contact_mechsm_role_cd,
+                     a.contact_mechsm_id,
+                     a.line1_addr,
+                     a.line2_addr,
+                     a.line3_addr,
+                     a.city_name,
+                     a.state_name,
+                     a.zip_code,
+                     LTRIM (RTRIM (p.ename)),
+                     cp.vendor_location,
+                     p.vendor_nbr;
+    END bulk_get_notice_rec;
+
+    PROCEDURE bulk_get_owner (contract_nbrlistjson   IN     CLOB,
+                              o_ref_cur                 OUT ref_cur)
+    AS
+        v_contract_type_code   intranet.contract.contract_type_code%TYPE;
+        v_role_code            intranet.party_contact_role.party_contact_mechsm_role_cd%TYPE;
+        c_owner_id    CONSTANT NUMBER := 201;
+        c_ownr        CONSTANT VARCHAR2 (4) := 'OWNR';
+        c_tena        CONSTANT VARCHAR2 (4) := 'TENA';
+
+        CURSOR cur IS
+            WITH
+                tmp
+                AS
+                    (SELECT b.*
+                       FROM JSON_TABLE (contract_nbrlistjson,
+                                        '$[*]'
+                                        COLUMNS (contractid PATH '$')) b)
+            SELECT *
+              FROM tmp;
+    BEGIN
+        FOR rec IN cur
+        LOOP
+            SELECT contract_type_code
+              INTO v_contract_type_code
+              FROM intranet.contract
+             WHERE contract_said =
+                   pg_contract.get_cur_contract (TO_NUMBER (rec.contractid));
+
+            IF v_contract_type_code = 'SUBT'
+            THEN
+                v_role_code := c_tena;
+            ELSE
+                v_role_code := c_ownr;
+            END IF;
+
+            OPEN o_ref_cur FOR
+                  SELECT DISTINCT
+                         cp.contract_said,
+                         p.ename
+                             AS organization,
+                         ia.line1_addr,
+                         ia.line2_addr,
+                         ia.line3_addr,
+                         ia.city_name,
+                         ia.state_postal_code,
+                         cmt.ename
+                             AS party_addr_role_code,
+                         cp.party_contact_mechsm_role_cd,
+                         cp.payee_chk_memo_text,
+                         ia.zip_code,
+                         LISTAGG (contract_nbr, ',')
+                             WITHIN GROUP (ORDER BY contract_nbr)
+                             AS contractnbr,
+                         COUNT (*)
+                             AS COUNT,
+                         cp.vendor_location
+                    FROM intranet.contract_party         cp
+                         INNER JOIN intranet.contract cn
+                             ON cp.contract_said = cn.contract_said,
+                         netsites.vw_party_summary       p,
+                         netsites.contact_mechsm         cm,
+                         netsites.contact_addr           ca,
+                         intranet.addr                   ia,
+                         netsites.party_contact_mechsm   pcm,
+                         netsites.contact_mechsm_category cmt,
+                         (SELECT b.contractid
+                            FROM JSON_TABLE (contract_nbrlistjson,
+                                             '$[*]'
+                                             COLUMNS (contractid PATH '$')) b)
+                         aa
+                   WHERE     cp.party_said = p.party_id
+                         AND p.party_id = pcm.party_id
+                         AND pcm.contact_mechsm_id = cm.id
+                         AND cm.id = ca.contact_mechsm_id
+                         AND ca.addr_id = ia.addr_said
+                         AND cm.contact_mechsm_category_id = c_owner_id
+                         AND cm.contact_mechsm_category_id = cmt.id
+                         AND cp.party_contact_mechsm_role_cd = v_role_code
+                         AND cp.contract_said =
+                             pg_contract.get_cur_contract (
+                                 TO_NUMBER (aa.contractid))
+                         AND ca.active_ind = netsites.pg_global.c_boolean_true
+                GROUP BY cp.contract_said,
+                         p.ename,
+                         ia.line1_addr,
+                         ia.line2_addr,
+                         ia.line3_addr,
+                         ia.city_name,
+                         ia.state_postal_code,
+                         cmt.ename,
+                         cp.party_contact_mechsm_role_cd,
+                         cp.payee_chk_memo_text,
+                         ia.zip_code,
+                         LTRIM (RTRIM (p.ename)),
+                         cp.vendor_location,
+                         p.vendor_nbr;
+        END LOOP;
+    EXCEPTION
+        WHEN OTHERS
+        THEN
+            DBMS_OUTPUT.put_line ('Some Exception: ');
+    END bulk_get_owner;
+
+    PROCEDURE sp_bulk_dish_sublease_terminate (
+        p_contract_nbr_list IN CLOB,
+        p_termination_dt    IN DATE     DEFAULT TO_DATE('12-JUN-2026', 'DD-MON-YYYY'),
+        p_termination_code  IN VARCHAR2 DEFAULT 'LANDLORD',
+        p_contract_desc     IN VARCHAR2 DEFAULT 'Terminated by VZ for default Dish did not cure. SRS 7/24/26',
+        p_user_id           IN VARCHAR2 DEFAULT 'sztuksa',
+        o_processed_count   OUT NUMBER
+    ) IS
+        TYPE t_said_list IS TABLE OF intranet.contract.contract_said%TYPE;
+        v_said_list t_said_list;
+        v_count     PLS_INTEGER := 0;
+    BEGIN
+        -- 1. Set session information
+        DBMS_APPLICATION_INFO.set_client_info (p_user_id);
+        DBMS_APPLICATION_INFO.set_module ('Bulk Dish sublease termination', '');
+        APP_UTL.PKG_SQL.SET_SHOW_SQL (FALSE);
+
+        -- 2. Fetch targeted target contract_said IDs using XMLTABLE
+        WITH contract_list AS (
+            SELECT TO_NUMBER(TRIM(COLUMN_VALUE)) AS contract_nbr
+            FROM XMLTABLE(('"' || REPLACE(p_contract_nbr_list, ',', '","') || '"'))
+        ),
+        max_amendments AS (
+            -- Filter contract table FIRST using indexed join before grouping
+            SELECT c.contract_nbr, MAX(c.ammendment_nbr) AS max_ammendment_nbr
+            FROM intranet.contract c
+            JOIN contract_list cl ON cl.contract_nbr = c.contract_nbr
+            GROUP BY c.contract_nbr
+        )
+        SELECT c.contract_said
+        BULK COLLECT INTO v_said_list
+        FROM intranet.contract c
+        JOIN max_amendments ma ON ma.contract_nbr = c.contract_nbr 
+                              AND ma.max_ammendment_nbr = c.ammendment_nbr;
+
+        IF v_said_list.COUNT = 0 THEN
+            o_processed_count := 0;
+            RETURN;
+        END IF;
+
+        -- 3. Perform Set-Based Bulk Updates 
+        FORALL i IN 1..v_said_list.COUNT
+            UPDATE intranet.contract
+            SET termination_dt   = p_termination_dt,
+                termination_code = p_termination_code,
+                contract_desc    = p_contract_desc,
+                fas13_doc_id     = 'NOREQ'
+            WHERE contract_said = v_said_list(i);
+
+        FORALL i IN 1..v_said_list.COUNT
+            UPDATE intranet.contract_pmt_date
+            SET prorate_termination_compl_ind = 0
+            WHERE contract_said = v_said_list(i);
+
+        -- 4. Call payment engine recalculation per contract
+        FOR i IN 1..v_said_list.COUNT LOOP
+            intranet.pkg_pmts.payments_for_termination_dt (
+                i_contract_id => v_said_list(i)
+            );
+            v_count := v_count + 1;
+        END LOOP;
+
+        o_processed_count := v_count;
+        COMMIT;
+
+    EXCEPTION
+        WHEN OTHERS THEN
+            ROLLBACK;
+            DBMS_OUTPUT.PUT_LINE ('ERROR in sp_bulk_dish_sublease_terminate: ' || SQLERRM);
+            RAISE;
+    END sp_bulk_dish_sublease_terminate;
+    
+    PROCEDURE sp_bulk_payment_hold(
+        p_contract_nbr_list     IN CLOB,
+        p_payee_chk_memo_text   IN VARCHAR2,
+        p_hold_comment          IN VARCHAR2,
+        p_hold_payment_reason   IN VARCHAR2,
+        p_stream_hold           IN VARCHAR2,
+        p_accrual_status        IN VARCHAR2,
+        p_mdg_number            IN VARCHAR2,
+        p_user_id               IN VARCHAR2,
+        o_processed_count       OUT NUMBER
+    ) IS
+        v_start_pos      INTEGER := 1;
+        v_comma_pos      INTEGER;
+        v_contract_id    VARCHAR2(50);
+        v_count          NUMBER := 0;
+        v_clob_len       INTEGER;
+    BEGIN
+        o_processed_count := 0;
+
+        -- Safety check
+        IF p_contract_nbr_list IS NULL THEN
+            RETURN;
+        END IF;
+
+        v_clob_len := DBMS_LOB.GETLENGTH(p_contract_nbr_list);
+
+        -- Loop through the comma-separated CLOB
+        WHILE v_start_pos <= v_clob_len LOOP
+            v_comma_pos := DBMS_LOB.INSTR(p_contract_nbr_list, ',', v_start_pos);
+
+            IF v_comma_pos = 0 THEN
+                -- Last item in the list
+                v_contract_id := TRIM(DBMS_LOB.SUBSTR(p_contract_nbr_list, v_clob_len - v_start_pos + 1, v_start_pos));
+                v_start_pos := v_clob_len + 1;
+            ELSE
+                -- Extract the contract ID up to the comma
+                v_contract_id := TRIM(DBMS_LOB.SUBSTR(p_contract_nbr_list, v_comma_pos - v_start_pos, v_start_pos));
+                v_start_pos := v_comma_pos + 1;
+            END IF;
+
+            IF v_contract_id IS NOT NULL THEN
+                -- ==========================================================
+                -- 1. Apply the hold using the package from your sample SQL
+                -- ==========================================================
+                intranet.pkg_pmts.hnp_log (
+                    i_created_by  => p_user_id,
+                    i_contract_id => TO_NUMBER(v_contract_id),
+                    i_pmt_method  => p_stream_hold, 
+                    i_msg_code    => intranet.pkg_global.c_pmt_hold_msg_code_info,
+                    i_msg         => p_hold_comment,
+                    i_object_name => 'PG_FUZE_BULK_UPD.sp_bulk_payment_hold'
+                );
+
+                -- ==========================================================
+                -- 2. Update Main Contract Data (Placeholder)
+                -- ==========================================================
+                -- Your Java code passes parameters like Accrual Status and MDG Number.
+                -- You will likely need an UPDATE statement here to apply those to the main table.
+                /*
+                UPDATE INTRANET.YOUR_MAIN_CONTRACT_TABLE
+                   SET PAYEE_CHK_MEMO_TEXT = p_payee_chk_memo_text,
+                       HOLD_PAYMENT_REASON = p_hold_payment_reason,
+                       ACCRUAL_STATUS      = p_accrual_status,
+                       MDG_NUMBER          = p_mdg_number,
+                       MODIFIED_BY         = p_user_id,
+                       MODIFIED_DATE       = SYSDATE
+                 WHERE CONTRACT_NUMBER     = v_contract_id;
+                */
+
+                v_count := v_count + 1;
+            END IF;
+        END LOOP;
+
+        -- Return the total successfully processed back to Java
+        o_processed_count := v_count;
+
+        -- Note: We DO NOT issue a COMMIT here. 
+        -- Spring Boot's JdbcTemplate is managing the transaction automatically.
+
+    EXCEPTION
+        WHEN OTHERS THEN
+            -- If an error occurs (e.g. invalid contract number), let it crash and propagate up.
+            -- Spring Boot catches this in your try/catch block and marks the group as FAILED in the HTML.
+            RAISE;
+    END sp_bulk_payment_hold;
+
+END pg_fuze_bulk_upd;
 
 
 
