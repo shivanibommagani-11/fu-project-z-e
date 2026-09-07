@@ -125,6 +125,38 @@ Use this as your spoken walkthrough in a design round.
 
 ---------------------------------------------------------------------------------------------
 
+Bulktermination.md-------
+
+
+Here is the exact lifecycle of a bulk termination request:
+1. The Request (Intent Detection)
+
+The Action: The user types something like, "I need to mass terminate some contracts."
+Behind the Scenes: The OrchestratorAgent intercepts the message. It uses keyword matching (looking for words like "mass", "terminate", or "bulk") to identify the BULK_TERMINATION intent. 
+The Handoff: Recognizing the intent, the Orchestrator packages the conversation context and routes the request directly to the Bulk Termination Agent. 
+2. The Decision Fork (Checking for Data)
+When the Bulk Termination Agent wakes up, the first thing it does is check its current AgentState to see if the user provided any contract records. This creates two distinct paths:
+Path A: The User Doesn't Have a File Yet
+
+Tool Execution: The Agent notices the records list is empty. It immediately selects the BulkTemplateTool from its registry. 
+Generation: The tool generates a pristine, correctly formatted Excel (.xlsx) file on the server.
+The Response: The Agent replies to the user: "I can help you terminate those contracts. Please download and fill out this formatted template..." and provides the download link. 
+Path B: The User Uploads the Filled Template
+
+The Upload: The user uploads the completed CSV/Excel file via your frontend, hitting the POST /api/chat/upload endpoint. 
+Pre-Processing: Before the Agent even sees it, the CSVProcessor reads the file, checks the file size, ensures it doesn't exceed the row limit, and converts the rows into a list of dictionaries. 
+Tool Execution: The Agent sees the valid records in its state and selects the BulkTerminationTool. 
+3. The Execution (Database Safety)
+Once the BulkTerminationTool is triggered with the user's records, it enforces strict business rules before touching the database:
+
+Validation: It relies on the CSVValidator to ensure every row has the correct contract numbers, future termination dates, and valid termination codes (like LANDLORD or DEFAULT). 
+The Transaction: It opens a secure session with the Oracle database. It runs highly specific SQL UPDATE queries on both the CONTRACT and CONTRACT_PMT_DATE tables. 
+ACID Compliance: If anything fails during the database update, it triggers a db.rollback() to undo the entire batch, preventing partial data corruption. If everything succeeds, it runs db.commit(). 
+4. The Final Report (User Feedback)
+
+Aggregation: The tool passes the execution metrics (Total Records, Successful, Failed, and specific Error Messages) back to the Agent. 
+The Response: The Agent formats this raw data into a clean, human-readable Markdown summary (e.g., ":white_check_mark: Bulk Termination Completed Successfully! 50 Terminated, 2 Failed") and sends it back to the chat UI so the user knows exactly what happened. 
+Bommagani Shivani  [12:39 PM]
 
 
 
@@ -134,9 +166,7 @@ Use this as your spoken walkthrough in a design round.
 
 
 
-
-
-
+-----------------------------------------------------------------------------------------------------------
 fuze-netsites-service — Business Process
 Documentation
 Audience: New team members with no prior knowledge of network site lease
