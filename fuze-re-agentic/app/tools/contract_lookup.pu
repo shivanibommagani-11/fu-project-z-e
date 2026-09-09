@@ -1,0 +1,163 @@
+"""
+Contract Lookup Tool - Retrieves comprehensive contract information.
+"""
+
+import logging
+from typing import Dict, Any, Optional
+from app.tools.base import BaseTool, ToolOutput
+from app.database.session import SessionLocal
+from app.database.models import Contract, ContractPmtDate
+
+logger = logging.getLogger(__name__)
+
+
+class ContractLookupTool(BaseTool):
+    """Tool for comprehensive contract lookups by SAID or contract number."""
+
+    name = "ContractLookupTool"
+    description = "Looks up comprehensive contract information by SAID or contract number"
+
+    async def execute(self, contract_said: Optional[str] = None, contract_nbr: Optional[str] = None, **kwargs) -> ToolOutput:
+        """
+        Look up contract by SAID or contract number.
+
+        Args:
+            contract_said: Contract SAID (6-digit ID)
+            contract_nbr: Contract number
+            **kwargs: Additional parameters (ignored)
+
+        Returns:
+            ToolResult with comprehensive contract information
+        """
+        try:
+            if not contract_said and not contract_nbr:
+                return ToolOutput(
+                    success=False,
+                    data={"error": "Must provide either contract_said or contract_nbr"},
+                    message="No contract identifier provided"
+                )
+
+            db = SessionLocal()
+            try:
+                # Build query
+                query = db.query(Contract)
+
+                if contract_said:
+                    try:
+                        said_int = int(contract_said)
+                        query = query.filter(Contract.contract_said == said_int)
+                    except ValueError:
+                        return ToolOutput(
+                            success=False,
+                            data={"error": f"Invalid SAID format: {contract_said}"},
+                            message="Contract SAID must be numeric"
+                        )
+
+                if contract_nbr:
+                    try:
+                        nbr_int = int(contract_nbr)
+                        query = query.filter(Contract.contract_nbr == nbr_int)
+                    except ValueError:
+                        return ToolOutput(
+                            success=False,
+                            data={"error": f"Invalid contract number format: {contract_nbr}"},
+                            message="Contract number must be numeric"
+                        )
+
+                contract = query.first()
+
+                if not contract:
+                    search_by = f"SAID {contract_said}" if contract_said else f"Contract Number {contract_nbr}"
+                    logger.warning(f"[ContractLookupTool] Contract not found: {search_by}")
+                    return ToolOutput(
+                        success=False,
+                        data={"error": f"No contract found with {search_by}"},
+                        message=f"Contract not found"
+                    )
+
+                # Build comprehensive contract info
+                contract_info = {
+                    "basic": {
+                        "contract_said": contract.contract_said,
+                        "contract_nbr": contract.contract_nbr,
+                        "amendment_nbr": contract.ammendment_nbr,
+                        "status": contract.contract_status or "N/A",
+                        "is_active": contract.is_active,
+                    },
+                    "dates": {
+                        "execution_date": str(contract.execution_dt) if contract.execution_dt else "N/A",
+                        "termination_date": str(contract.termination_dt) if contract.termination_dt else "N/A",
+                        "commencement_date": str(contract.commencement_dt) if contract.commencement_dt else "N/A",
+                        "expiration_date": str(contract.expiration_dt) if contract.expiration_dt else "N/A",
+                        "option_expiration_date": str(contract.option_expiration_dt) if contract.option_expiration_dt else "N/A",
+                        "created_date": str(contract.creation_dt) if contract.creation_dt else "N/A",
+                        "last_modified_date": str(contract.last_modified_dt) if contract.last_modified_dt else "N/A",
+                    },
+                    "termination": {
+                        "termination_code": contract.termination_code or "N/A",
+                        "description": contract.contract_desc or "N/A",
+                    },
+                    "financial": {
+                        "base_rent": str(contract.base_rent) if contract.base_rent else "N/A",
+                        "annual_rent": str(contract.annual_rent) if contract.annual_rent else "N/A",
+                        "square_footage": str(contract.square_footage) if contract.square_footage else "N/A",
+                        "fas13_doc_id": contract.fas13_doc_id or "N/A",
+                        "gl_account": contract.gl_account or "N/A",
+                        "cost_center": contract.cost_center or "N/A",
+                    },
+                    "lease": {
+                        "lease_type": contract.lease_type or "N/A",
+                        "building_id": contract.building_id or "N/A",
+                        "space_id": contract.space_id or "N/A",
+                    },
+                    "tenant": {
+                        "tenant_id": contract.tenant_id or "N/A",
+                        "tenant_name": contract.tenant_name or "N/A",
+                    },
+                    "affiliate": {
+                        "affiliate_flag": contract.affiliate_flag or "N/A",
+                        "affiliate_id": contract.affiliate_id or "N/A",
+                    },
+                    "audit": {
+                        "created_by": contract.created_by or "N/A",
+                        "modified_by": contract.modified_by or "N/A",
+                    },
+                }
+
+                # Fetch payment schedule if available
+                payment_dates = db.query(ContractPmtDate).filter(
+                    ContractPmtDate.contract_said == contract.contract_said
+                ).all()
+
+                if payment_dates:
+                    contract_info["payment_schedule"] = [
+                        {
+                            "payment_start": str(pmt.payment_start_dt) if pmt.payment_start_dt else "N/A",
+                            "payment_end": str(pmt.payment_end_dt) if pmt.payment_end_dt else "N/A",
+                            "amount": str(pmt.payment_amount) if pmt.payment_amount else "N/A",
+                            "frequency": pmt.payment_frequency or "N/A",
+                            "termination_processed": bool(pmt.termination_processed_ind),
+                        }
+                        for pmt in payment_dates
+                    ]
+                else:
+                    contract_info["payment_schedule"] = []
+
+                logger.info(f"[ContractLookupTool] ✓ Contract lookup successful: SAID {contract.contract_said}")
+
+                return ToolOutput(
+                    success=True,
+                    data=contract_info,
+                    message=f"Contract {contract.contract_nbr} (SAID {contract.contract_said}) found successfully"
+                )
+
+            finally:
+                db.close()
+
+        except Exception as e:
+            logger.error(f"[ContractLookupTool] Error during lookup: {str(e)}", exc_info=True)
+            return ToolOutput(
+                success=False,
+                data={"error": str(e)},
+                message="Error looking up contract"
+            )
